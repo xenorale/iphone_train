@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { useApiKey } from '@/lib/ai/key';
 import { migrate } from '@/lib/db';
+import { configureNotifications } from '@/lib/notifications';
 import { queryClient } from '@/lib/query';
 
 const NavDarkTheme = {
@@ -27,6 +28,7 @@ const NavDarkTheme = {
 export default function RootLayout() {
   useEffect(() => {
     migrate();
+    configureNotifications();
     useApiKey.getState().load();
   }, []);
 
@@ -48,6 +50,7 @@ export default function RootLayout() {
                 name="workout/[id]"
                 options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
               />
+              <Stack.Screen name="summary/[id]" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
               <Stack.Screen name="new-program" options={{ animation: 'fade' }} />
             </Stack>
           </ThemeProvider>

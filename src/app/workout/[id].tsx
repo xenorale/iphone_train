@@ -194,9 +194,12 @@ export default function WorkoutScreen() {
   const doFinish = () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    if (sessionRef.current) finishSession(sessionRef.current);
+    const sid = sessionRef.current;
+    if (sid) finishSession(sid);
     queryClient.invalidateQueries();
-    router.back();
+    // finishSession drops sessions with nothing logged — no summary for those
+    if (sid && completedCount > 0) router.replace(`/summary/${sid}`);
+    else router.back();
   };
 
   return (

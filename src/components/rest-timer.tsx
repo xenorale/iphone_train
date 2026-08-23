@@ -3,9 +3,10 @@ import { Plus, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { ProgressBar, PressableScale, Txt } from '@/components/ui';
+import { PressableScale, ProgressBar, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { cancelAlert, scheduleRestAlert } from '@/lib/notifications';
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60);
@@ -13,7 +14,13 @@ function fmt(sec: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Sticky rest countdown. Remount with a new `key` to (re)start. */
+/**
+ * Sticky rest countdown. Remount with a new `key` to (re)start.
+ *
+ * Counts against a wall-clock deadline rather than decrementing, so locking the
+ * phone mid-rest doesn't stall it, and backs itself with a local notification so
+ * the alert lands even with the app closed.
+ */
 export function RestTimer({
   seconds,
   onDone,
@@ -25,14 +32,32 @@ export function RestTimer({
 }) {
   const theme = useTheme();
   const [total, setTotal] = useState(seconds);
-  const [remaining, setRemaining] = useState(seconds);
+  const [endsAt, setEndsAt] = useState(() => Date.now() + seconds * 1000);
+  const [now, setNow] = useState(Date.now());
   const firedRef = useRef(false);
+  const alertRef = useRef<string | null>(null);
 
-  // tick down once per second
+  const remaining = Math.max(0, Math.ceil((endsAt - now) / 1000));
+
+  // tick against the clock
   useEffect(() => {
-    const id = setInterval(() => setRemaining((r) => (r > 0 ? r - 1 : 0)), 1000);
+    const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
   }, []);
+
+  // schedule the background alert once, cancel it if the timer is dismissed
+  useEffect(() => {
+    let cancelled = false;
+    scheduleRestAlert(seconds).then((id) => {
+      if (cancelled) cancelAlert(id);
+      else alertRef.current = id;
+    });
+    return () => {
+      cancelled = true;
+      cancelAlert(alertRef.current);
+      alertRef.current = null;
+    };
+  }, [seconds]);
 
   // fire onDone exactly once when it reaches zero (in an effect, never during render)
   useEffect(() => {
@@ -41,6 +66,14 @@ export function RestTimer({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onDone();
   }, [remaining, onDone]);
+
+  const addFifteen = async () => {
+    setTotal((t) => t + 15);
+    const nextEnd = endsAt + 15_000;
+    setEndsAt(nextEnd);
+    await cancelAlert(alertRef.current);
+    alertRef.current = await scheduleRestAlert(Math.ceil((nextEnd - Date.now()) / 1000));
+  };
 
   return (
     <View style={[styles.bar, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
@@ -57,15 +90,15 @@ export function RestTimer({
       </View>
       <PressableScale
         haptic={false}
-        onPress={() => {
-          setTotal((t) => t + 15);
-          setRemaining((r) => r + 15);
-        }}
+        onPress={addFifteen}
         style={[styles.btn, { backgroundColor: theme.backgroundElement }]}>
         <Plus size={16} color={theme.text} />
         <Txt variant="label">15</Txt>
       </PressableScale>
-      <PressableScale haptic={false} onPress={onDismiss} style={[styles.btn, { backgroundColor: theme.backgroundElement }]}>
+      <PressableScale
+        haptic={false}
+        onPress={onDismiss}
+        style={[styles.btn, { backgroundColor: theme.backgroundElement }]}>
         <X size={16} color={theme.textSecondary} />
       </PressableScale>
     </View>

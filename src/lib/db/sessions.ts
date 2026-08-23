@@ -160,3 +160,78 @@ export function exerciseDayLogs(exerciseId: string, limit = 8): ExerciseDayLog[]
     .slice(0, limit)
     .map(([startedAt, sets]) => ({ startedAt, sets }));
 }
+
+export type SessionExercise = { exerciseId: string; nameRu: string; sets: SetLine[] };
+export type SessionDetail = {
+  id: string;
+  title: string | null;
+  programDayId: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+  exercises: SessionExercise[];
+  /** Total kg moved — weight × reps across every completed set. */
+  volume: number;
+};
+
+/** Everything one finished session logged, shaped for the post-workout review. */
+export function sessionDetail(sessionId: string): SessionDetail | null {
+  const s = db.getFirstSync<SessionRow>('SELECT * FROM workout_sessions WHERE id = ?', [sessionId]);
+  if (!s) return null;
+
+  const rows = db.getAllSync<{
+    exercise_id: string;
+    name_ru: string | null;
+    weight: number | null;
+    reps: number | null;
+  }>(
+    `SELECT exercise_id, name_ru, weight, reps
+       FROM logged_sets
+      WHERE session_id = ? AND completed = 1
+      ORDER BY created_at ASC, set_index ASC`,
+    [sessionId],
+  );
+
+  const byExercise = new Map<string, SessionExercise>();
+  let volume = 0;
+  for (const r of rows) {
+    volume += (r.weight ?? 0) * (r.reps ?? 0);
+    const cur = byExercise.get(r.exercise_id);
+    const line = { weight: r.weight, reps: r.reps };
+    if (cur) cur.sets.push(line);
+    else byExercise.set(r.exercise_id, { exerciseId: r.exercise_id, nameRu: r.name_ru ?? '', sets: [line] });
+  }
+
+  return {
+    id: s.id,
+    title: s.title,
+    programDayId: s.program_day_id,
+    startedAt: s.started_at,
+    finishedAt: s.finished_at,
+    exercises: [...byExercise.values()],
+    volume: Math.round(volume),
+  };
+}
+
+/** The previous time this same program day was trained, for a like-for-like diff. */
+export function previousSessionFor(programDayId: string | null, before: number): SessionDetail | null {
+  if (!programDayId) return null;
+  const prev = db.getFirstSync<{ id: string }>(
+    `SELECT id FROM workout_sessions
+      WHERE program_day_id = ? AND finished_at IS NOT NULL AND started_at < ?
+      ORDER BY started_at DESC LIMIT 1`,
+    [programDayId, before],
+  );
+  return prev ? sessionDetail(prev.id) : null;
+}
+
+export function saveSessionReview(sessionId: string, content: string) {
+  db.runSync('UPDATE workout_sessions SET review = ? WHERE id = ?', [content, sessionId]);
+}
+
+export function getSessionReview(sessionId: string): string | null {
+  const r = db.getFirstSync<{ review: string | null }>(
+    'SELECT review FROM workout_sessions WHERE id = ?',
+    [sessionId],
+  );
+  return r?.review ?? null;
+}

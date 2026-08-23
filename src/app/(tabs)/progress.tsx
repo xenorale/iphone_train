@@ -25,7 +25,10 @@ export default function ProgressScreen() {
   const [sheet, setSheet] = useState(false);
 
   const { data: metrics = [] } = useQuery({ queryKey: ['metrics'], queryFn: () => allMetrics() });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['metrics'] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['latestMetric'] });
+  };
 
   const withWeight = metrics.filter((m) => m.bodyweight != null);
   const ascending = [...withWeight].reverse();

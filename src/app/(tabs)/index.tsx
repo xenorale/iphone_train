@@ -1,11 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { ArrowRight, CalendarCheck, ChevronRight, Dumbbell, Sparkles } from 'lucide-react-native';
+import { ArrowRight, CalendarCheck, ChevronRight, Dumbbell, Sparkles, Utensils } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Card, PressableScale, Screen, Txt } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { todayISO, totalsForDate } from '@/lib/db/food';
+import { latestMetric } from '@/lib/db/metrics';
 import { sessionCountSince } from '@/lib/db/sessions';
+import { dailyTargets } from '@/lib/nutrition';
 import { useActiveProgram } from '@/lib/hooks/use-active-program';
 import { age, PROFILE } from '@/lib/profile';
 import { DayCard } from './program';
@@ -18,6 +22,16 @@ export default function TodayScreen() {
   // Floating schedule: the next session is simply the next day in the rotation,
   // whenever you actually make it to the gym.
   const done = program ? sessionCountSince(program.created_at) : 0;
+  const today = todayISO();
+  const { data: eaten } = useQuery({
+    queryKey: ['foodTotals', today],
+    queryFn: () => totalsForDate(today),
+  });
+  const { data: bodyweight } = useQuery({
+    queryKey: ['latestMetric'],
+    queryFn: () => latestMetric()?.bodyweight ?? PROFILE.fallbackBodyweight,
+  });
+  const targets = dailyTargets(bodyweight ?? PROFILE.fallbackBodyweight);
   const nextDay = program?.days.length ? program.days[done % program.days.length] : null;
   const week = program?.days.length ? Math.floor(done / program.days.length) + 1 : 1;
 
@@ -74,6 +88,21 @@ export default function TodayScreen() {
           />
         </Card>
       )}
+
+      <PressableScale onPress={() => router.push('/food')} pressedScale={0.98}>
+        <Card>
+          <View style={styles.linkRow}>
+            <Utensils size={20} color={theme.accent} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodyStrong">Питание</Txt>
+              <Txt variant="caption" color="textSecondary">
+                {eaten?.kcal ?? 0} из {targets.kcal} ккал · белок {eaten?.protein ?? 0} из {targets.protein} г
+              </Txt>
+            </View>
+            <ChevronRight size={18} color={theme.textTertiary} />
+          </View>
+        </Card>
+      </PressableScale>
 
       <PressableScale onPress={() => router.push('/library')} pressedScale={0.98}>
         <Card>

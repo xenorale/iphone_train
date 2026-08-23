@@ -42,7 +42,14 @@
         }
       ],
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#FFE000",
+          "defaultChannel": "rest-timer"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

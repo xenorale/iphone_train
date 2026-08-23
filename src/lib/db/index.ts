@@ -82,6 +82,19 @@ export function migrate() {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS food_log (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      meal TEXT NOT NULL,
+      text TEXT NOT NULL,
+      kcal REAL,
+      protein REAL,
+      fat REAL,
+      carbs REAL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_food_date ON food_log(date);
     CREATE INDEX IF NOT EXISTS idx_days_program ON program_days(program_id);
     CREATE INDEX IF NOT EXISTS idx_pex_day ON program_exercises(day_id);
     CREATE INDEX IF NOT EXISTS idx_sets_session ON logged_sets(session_id);
@@ -103,6 +116,7 @@ export function migrate() {
   addColumn('programs', 'current_week', 'INTEGER');
   addColumn('programs', 'week_started_at', 'INTEGER');
   addColumn('program_exercises', 'start_weight', 'REAL');
+  addColumn('workout_sessions', 'review', 'TEXT');
 
   migrated = true;
 }

@@ -75,6 +75,7 @@ export type SessionRow = {
   started_at: number;
   finished_at: number | null;
   notes: string | null;
+  review: string | null;
 };
 
 export type LoggedSetRow = {
