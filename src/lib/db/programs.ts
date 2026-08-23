@@ -1,4 +1,5 @@
 import type { GeneratedProgram } from '@/lib/ai/program';
+import { EXERCISES, getExercise } from '@/lib/catalog';
 import type { ProgramDayRow, ProgramExerciseRow, ProgramRow } from '@/lib/types';
 import { uid } from '@/lib/uid';
 import { db } from './index';
@@ -111,4 +112,67 @@ export function replaceProgramExercise(pexId: string, exerciseId: string, nameRu
     'UPDATE program_exercises SET exercise_id = ?, name_ru = ?, start_weight = NULL WHERE id = ?',
     [exerciseId, nameRu, pexId],
   );
+}
+
+/**
+ * The exercise catalog was replaced (slug ids like "barbell-bench-press" became
+ * numeric ids from the GIF dataset), which orphans programs created earlier —
+ * their exercises resolve to nothing, so no animation and no muscle map.
+ *
+ * Re-points them by Russian name. Runs once at startup and is a no-op afterwards.
+ */
+export function repairExerciseIds(): number {
+  const rows = db.getAllSync<{ exercise_id: string; name_ru: string }>(
+    'SELECT DISTINCT exercise_id, name_ru FROM program_exercises',
+  );
+  const stale = rows.filter((r) => !getExercise(r.exercise_id));
+  if (!stale.length) return 0;
+
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/ё/g, 'е')
+      .replace(/[^а-я0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const byName = new Map(EXERCISES.map((e) => [normalize(e.nameRu), e]));
+  const catalogWords = EXERCISES.map((e) => ({ ex: e, words: normalize(e.nameRu).split(' ') }));
+
+  /** Exact name first, then best word overlap — wording drifted between datasets. */
+  const findMatch = (nameRu: string) => {
+    const key = normalize(nameRu ?? '');
+    if (!key) return undefined;
+    const exact = byName.get(key);
+    if (exact) return exact;
+
+    const wanted = new Set(key.split(' '));
+    let best: { ex: (typeof EXERCISES)[number]; score: number } | null = null;
+    for (const { ex, words } of catalogWords) {
+      const hits = words.filter((w) => wanted.has(w)).length;
+      const score = hits / Math.max(wanted.size, words.length);
+      if (!best || score > best.score) best = { ex, score };
+    }
+    return best && best.score >= 0.5 ? best.ex : undefined;
+  };
+
+  let fixed = 0;
+  db.withTransactionSync(() => {
+    for (const row of stale) {
+      const match = findMatch(row.name_ru);
+      if (!match) continue;
+      // name too: keep the program in step with what the catalog now calls it
+      db.runSync(
+        'UPDATE program_exercises SET exercise_id = ?, name_ru = ? WHERE exercise_id = ?',
+        [match.id, match.nameRu, row.exercise_id],
+      );
+      db.runSync('UPDATE logged_sets SET exercise_id = ?, name_ru = ? WHERE exercise_id = ?', [
+        match.id,
+        match.nameRu,
+        row.exercise_id,
+      ]);
+      fixed += 1;
+    }
+  });
+  return fixed;
 }

@@ -4,11 +4,12 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useApiKey } from '@/lib/ai/key';
 import { migrate } from '@/lib/db';
+import { repairExerciseIds } from '@/lib/db/programs';
 import { configureNotifications } from '@/lib/notifications';
 import { queryClient } from '@/lib/query';
 
@@ -28,13 +29,14 @@ const NavDarkTheme = {
 export default function RootLayout() {
   useEffect(() => {
     migrate();
+    repairExerciseIds();
     configureNotifications();
     useApiKey.getState().load();
   }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.dark.background }}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider value={NavDarkTheme}>
             <StatusBar style="light" />

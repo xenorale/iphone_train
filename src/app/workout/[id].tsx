@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronRight, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoachSheet } from '@/components/coach-sheet';
 import { ExerciseRunner, type SetEntry } from '@/components/exercise-runner';
@@ -41,6 +41,8 @@ export default function WorkoutScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // fullScreenModal doesn't always hand SafeAreaView its insets — apply them ourselves
+  const insets = useSafeAreaInsets();
 
   const [day, setDay] = useState(() => getProgramDay(id));
   /** null = overview list, number = that exercise full screen */
@@ -102,7 +104,12 @@ export default function WorkoutScreen() {
 
   if (!day) {
     return (
-      <SafeAreaView style={[styles.flex, styles.center, { backgroundColor: theme.background }]}>
+      <View
+        style={[
+          styles.flex,
+          styles.center,
+          { backgroundColor: theme.background, paddingTop: insets.top },
+        ]}>
         <Txt variant="body" color="textSecondary">
           Тренировка не найдена
         </Txt>
@@ -113,7 +120,7 @@ export default function WorkoutScreen() {
           onPress={() => router.back()}
           style={{ marginTop: Spacing.four }}
         />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -213,7 +220,11 @@ export default function WorkoutScreen() {
   ) : null;
 
   return (
-    <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
+    <View
+      style={[
+        styles.flex,
+        { backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}>
       {active ? (
         <ExerciseRunner
           pex={active}
@@ -341,7 +352,7 @@ export default function WorkoutScreen() {
           onClose={() => setCoachWorkout(false)}
         />
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
