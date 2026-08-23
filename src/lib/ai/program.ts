@@ -1,13 +1,9 @@
 import { EXERCISES, getExercise } from '@/lib/catalog';
 import { age, bmi, PROFILE } from '@/lib/profile';
 import type { Exercise, Phase, StrengthAnchors } from '@/lib/types';
-import {
-  AiError,
-  chatWithFallback,
-  extractJson,
-  FREE_FALLBACK_MODELS,
-  type ChatMessage,
-} from './openrouter';
+import { AiError, chatWithFallback, extractJson, type ChatMessage } from './openrouter';
+import { sanitizeWeight } from '@/lib/strength-standards';
+import { PROGRAM_MODEL, withFallbacks } from './models';
 import { aiProgramSchema } from './schemas';
 
 export type GeneratedExercise = {
@@ -49,7 +45,10 @@ export function estimateOneRm(workingWeight: number, reps = 7): number {
  */
 function allowedExercises(): Exercise[] {
   const gymEquipment: readonly string[] = PROFILE.equipment;
-  const pool = EXERCISES.filter((e) => gymEquipment.includes(e.equipment));
+  const bannedEquipment: readonly string[] = PROFILE.excludedWithEquipment;
+  const isExcluded = (e: Exercise) =>
+    bannedEquipment.includes(e.equipment) && PROFILE.excludedPatterns.some((re) => re.test(e.name));
+  const pool = EXERCISES.filter((e) => gymEquipment.includes(e.equipment) && !isExcluded(e));
 
   const PER_GROUP = 8;
   const byGroup = new Map<string, Exercise[]>();
@@ -117,8 +116,7 @@ ${catalog}
 - 6–8 упражнений в день, тяжёлая база в начале, изоляция в конце.
 - ОБЯЗАТЕЛЬНО в каждом дне минимум одно упражнение на пресс (группа «Пресс»).
 - ОБЯЗАТЕЛЬНО в каждом дне 1–2 упражнения с собственным весом (подтягивания, брусья, отжимания) — вперемешку с железом, а не отдельным блоком в конце.
-- Веса задавай через проценты от 1ПМ: база 75–85% (5–8 повторов), изоляция 60–70% (10–14 повторов). startWeight считай в кг от указанного 1ПМ и округляй до 2.5 кг.
-- Своё тело и кардио — startWeight = 0.
+- Рабочие веса НЕ указывай — их считает само приложение по силовым атлета. Твоя задача: подобрать упражнения, подходы и повторы.
 - Цель совмещает рельеф и силу → phase = "recomp", если нет веской причины иначе. В phaseReason объясни выбор 1–2 предложениями по-русски.
 - weeks — длительность мезоцикла (8–12).
 - Укажи rpe (7–9) и restSec: база 150–210, изоляция 60–90.
@@ -136,7 +134,7 @@ ${catalog}
       "title": "string — напр. 'День 1 — Грудь и трицепс'",
       "focus": "string — основные группы",
       "exercises": [
-        { "exerciseId": "id из списка", "sets": 4, "repMin": 6, "repMax": 10, "rpe": 8, "restSec": 150, "startWeight": 60, "note": "" }
+        { "exerciseId": "id из списка", "sets": 4, "repMin": 6, "repMax": 10, "rpe": 8, "restSec": 150, "note": "" }
       ]
     }
   ]
@@ -163,13 +161,17 @@ function resolveExercise(id: string): { id: string; nameRu: string } | null {
   return found ? { id: found.id, nameRu: found.nameRu } : null;
 }
 
-function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>): GeneratedProgram {
+function normalize(
+  parsed: ReturnType<typeof aiProgramSchema.parse>,
+  input: ProgramInput,
+): GeneratedProgram {
   const days: GeneratedDay[] = [];
   for (const d of parsed.days) {
     const exercises: GeneratedExercise[] = [];
     for (const ex of d.exercises) {
       const resolved = resolveExercise(ex.exerciseId);
       if (!resolved) continue;
+      const catalogEntry = getExercise(resolved.id)!;
       const repMin = Math.min(ex.repMin, ex.repMax);
       const repMax = Math.max(ex.repMin, ex.repMax);
       exercises.push({
@@ -180,7 +182,7 @@ function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>): GeneratedP
         repMax,
         rpe: ex.rpe,
         restSec: ex.restSec,
-        startWeight: ex.startWeight != null && ex.startWeight > 0 ? ex.startWeight : undefined,
+        startWeight: sanitizeWeight(ex.startWeight, catalogEntry, input.strength, input.bodyweight),
         note: ex.note?.trim() || undefined,
       });
     }
@@ -199,14 +201,14 @@ function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>): GeneratedP
 }
 
 /** Generate a weekly program. Validates JSON and retries once on failure. */
-export async function generateProgram(input: ProgramInput, model: string): Promise<GeneratedProgram> {
-  const models = [...new Set([model, ...FREE_FALLBACK_MODELS])];
+export async function generateProgram(input: ProgramInput): Promise<GeneratedProgram> {
+  const models = withFallbacks(PROGRAM_MODEL);
   const attempt = async (repair?: string) => {
     const { content } = await chatWithFallback(
       { messages: buildMessages(input, repair), temperature: 0.5, maxTokens: 5000 },
       models,
     );
-    return normalize(aiProgramSchema.parse(extractJson(content)));
+    return normalize(aiProgramSchema.parse(extractJson(content)), input);
   };
 
   try {

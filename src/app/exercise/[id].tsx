@@ -45,7 +45,7 @@ export default function ExerciseDetailScreen() {
           </IconButton>
         </View>
 
-        <ExerciseGif exerciseId={exercise.id} height={280} />
+        <ExerciseGif exerciseId={exercise.id} height={210} />
 
         <Txt variant="title">{exercise.nameRu}</Txt>
 

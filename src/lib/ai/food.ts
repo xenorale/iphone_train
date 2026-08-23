@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import type { Macros } from '@/lib/db/food';
-import { FOOD_MODEL } from '@/lib/store/settings';
-import { chatWithFallback, extractJson, FREE_FALLBACK_MODELS } from './openrouter';
+import { FOOD_MODEL, withFallbacks } from './models';
+import { chatWithFallback, extractJson } from './openrouter';
 
 const macroSchema = z.object({
   kcal: z.coerce.number().min(0).max(6000).catch(0),
@@ -29,7 +29,7 @@ export async function estimateMacros(text: string): Promise<Macros> {
         { role: 'user', content: text },
       ],
     },
-    [...new Set([FOOD_MODEL, ...FREE_FALLBACK_MODELS])],
+    withFallbacks(FOOD_MODEL),
   );
   const parsed = macroSchema.parse(extractJson(content));
   return {

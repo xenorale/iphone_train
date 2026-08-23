@@ -1,6 +1,7 @@
 import type { SessionDetail } from '@/lib/db/sessions';
 import { age, PROFILE } from '@/lib/profile';
-import { chatWithFallback, FREE_FALLBACK_MODELS } from './openrouter';
+import { COACH_MODEL, withFallbacks } from './models';
+import { chatWithFallback } from './openrouter';
 
 const SYSTEM =
   'Ты персональный тренер. Разбираешь только что завершённую тренировку. ' +
@@ -21,7 +22,6 @@ function describe(session: SessionDetail): string {
 export async function reviewWorkout(
   session: SessionDetail,
   previous: SessionDetail | null,
-  model: string,
 ): Promise<string> {
   const minutes = session.finishedAt
     ? Math.max(1, Math.round((session.finishedAt - session.startedAt) / 60000))
@@ -54,7 +54,7 @@ ${describe(session)}${comparison}
         },
       ],
     },
-    [...new Set([model, ...FREE_FALLBACK_MODELS])],
+    withFallbacks(COACH_MODEL),
   );
   return content.trim();
 }

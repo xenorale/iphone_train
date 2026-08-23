@@ -1,9 +1,9 @@
 import { useRouter } from 'expo-router';
-import { Bell, Check, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react-native';
+import { Bell, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, Switch, View } from 'react-native';
 
-import { Button, Card, Chip, Divider, Input, PressableScale, Screen, Txt } from '@/components/ui';
+import { Button, Card, Chip, Input, PressableScale, Screen, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/lib/ai/key';
@@ -11,7 +11,7 @@ import { estimateOneRm } from '@/lib/ai/program';
 import { latestMetric } from '@/lib/db/metrics';
 import { syncTrainingReminders } from '@/lib/notifications';
 import { age, bmi, PROFILE } from '@/lib/profile';
-import { AI_MODELS, useSettings } from '@/lib/store/settings';
+import { useSettings } from '@/lib/store/settings';
 
 const WEEKDAYS = [
   { iso: 1, label: 'Пн' },
@@ -38,8 +38,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { hasKey, load, save, clear } = useApiKey();
   const {
-    aiModel,
-    setAiModel,
     strength,
     trainingDays,
     setTrainingDays,
@@ -228,29 +226,6 @@ export default function SettingsScreen() {
         </PressableScale>
       </Card>
 
-      {/* MODEL */}
-      <Card padding="five">
-        <Txt variant="subtitle">Модель ИИ</Txt>
-        <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two, marginBottom: Spacing.three }}>
-          Используется для программы и разборов. Быстрые мелкие запросы (еда) всегда идут на самой
-          дешёвой модели.
-        </Txt>
-        {AI_MODELS.map((m, i) => (
-          <View key={m.id}>
-            {i > 0 ? <Divider /> : null}
-            <PressableScale haptic={false} onPress={() => setAiModel(m.id)} style={styles.modelRow}>
-              <View style={{ flex: 1 }}>
-                <Txt variant="body">{m.label}</Txt>
-                <Txt variant="caption" color="textTertiary">
-                  {m.id}
-                </Txt>
-              </View>
-              {aiModel === m.id ? <Check size={18} color={theme.accent} /> : null}
-            </PressableScale>
-          </View>
-        ))}
-      </Card>
-
       <Txt variant="caption" color="textTertiary" center style={{ marginTop: Spacing.two }}>
         VOLT · v1.0.0
       </Txt>
@@ -263,6 +238,5 @@ const styles = StyleSheet.create({
   rowIcon: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 5, borderRadius: Radius.pill },
   link: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
-  modelRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three, gap: Spacing.three },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.three },
 });

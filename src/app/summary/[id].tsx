@@ -17,7 +17,6 @@ import {
   saveSessionReview,
   sessionDetail,
 } from '@/lib/db/sessions';
-import { useSettings } from '@/lib/store/settings';
 
 export default function WorkoutSummaryScreen() {
   const theme = useTheme();
@@ -25,7 +24,6 @@ export default function WorkoutSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const hasKey = useApiKey((s) => s.hasKey);
-  const aiModel = useSettings((s) => s.aiModel);
 
   const session = useMemo(() => sessionDetail(id), [id]);
   const [review, setReview] = useState<string | null>(() => getSessionReview(id));
@@ -37,7 +35,7 @@ export default function WorkoutSummaryScreen() {
     let cancelled = false;
     setLoading(true);
     const previous = previousSessionFor(session.programDayId, session.startedAt);
-    reviewWorkout(session, previous, aiModel)
+    reviewWorkout(session, previous)
       .then((content) => {
         if (cancelled) return;
         saveSessionReview(session.id, content);

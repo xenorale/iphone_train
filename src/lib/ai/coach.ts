@@ -1,11 +1,11 @@
-import { chatWithFallback, FREE_FALLBACK_MODELS } from './openrouter';
+import { COACH_MODEL, withFallbacks } from './models';
+import { chatWithFallback } from './openrouter';
 
 export type CoachScope = 'exercise' | 'workout';
 
 export type AskCoachParams = {
   scope: CoachScope;
   question: string;
-  model: string;
   exerciseName?: string;
   muscleRu?: string;
   workoutTitle?: string;
@@ -40,7 +40,7 @@ export async function askCoach(params: AskCoachParams): Promise<string> {
         },
       ],
     },
-    [...new Set([params.model, ...FREE_FALLBACK_MODELS])],
+    withFallbacks(COACH_MODEL),
   );
   return content.trim();
 }

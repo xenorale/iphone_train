@@ -42,7 +42,7 @@ export default function NewProgramScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const hasKey = useApiKey((s) => s.hasKey);
-  const { aiModel, strength, setStrength } = useSettings();
+  const { strength, setStrength } = useSettings();
 
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(FIELDS.map((f) => [f.key, strength[f.key] != null ? String(strength[f.key]) : ''])),
@@ -68,7 +68,7 @@ export default function NewProgramScreen() {
     setError(null);
     setGenerating(true);
     try {
-      const program = await generateProgram({ strength: anchors, bodyweight }, aiModel);
+      const program = await generateProgram({ strength: anchors, bodyweight });
       saveProgram(program);
       await queryClient.invalidateQueries({ queryKey: ['activeProgram'] });
       router.replace('/program');
@@ -107,8 +107,9 @@ export default function NewProgramScreen() {
             Рабочие веса
           </Txt>
           <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two }}>
-            Вес, с которым делаешь 6–8 повторов. Не разовый максимум. Не знаешь — оставь пусто,
-            ИИ прикинет по массе тела и возрасту.
+            Вес, с которым делаешь 6–8 повторов, не разовый максимум. От них считаются веса во
+            всей программе, так что лучше заполнить — иначе всё посчитается от массы тела и может
+            не совпасть с твоим реальным уровнем.
           </Txt>
 
           <View style={{ gap: Spacing.four, marginTop: Spacing.four }}>
@@ -182,7 +183,7 @@ function Generating() {
         Собираю твою программу…
       </Txt>
       <Txt variant="body" color="textSecondary" center style={{ marginTop: Spacing.two, paddingHorizontal: Spacing.eight }}>
-        Считаю проценты от 1ПМ, подбираю упражнения и прогрессию
+        Подбираю упражнения, подходы и прогрессию
       </Txt>
     </SafeAreaView>
   );

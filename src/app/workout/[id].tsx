@@ -1,16 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, Repeat2, Scale, Sparkles, X } from 'lucide-react-native';
+import { Check, ChevronRight, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CoachSheet } from '@/components/coach-sheet';
+import { ExerciseRunner, type SetEntry } from '@/components/exercise-runner';
 import { ExerciseSwapSheet } from '@/components/exercise-swap-sheet';
 import { PlateCalculator } from '@/components/plate-calculator';
 import { RestTimer } from '@/components/rest-timer';
-import { SetHistory } from '@/components/set-history';
 import { Button, Card, IconButton, PressableScale, ProgressBar, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -20,8 +20,6 @@ import { finishSession, startSession, upsertSet } from '@/lib/db/sessions';
 import { THUMBS } from '@/lib/gif-map';
 import { suggestNext, type Suggestion } from '@/lib/progression';
 import type { ProgramExerciseRow } from '@/lib/types';
-
-type SetEntry = { id?: string; weight: string; reps: string; done: boolean };
 
 const num = (s: string): number | null => {
   const v = parseFloat(s.replace(',', '.'));
@@ -45,6 +43,8 @@ export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [day, setDay] = useState(() => getProgramDay(id));
+  /** null = overview list, number = that exercise full screen */
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const suggestions = useMemo(() => {
     const m: Record<string, Suggestion> = {};
@@ -170,7 +170,7 @@ export default function WorkoutScreen() {
     setDay(fresh);
     const pex = fresh?.exercises.find((e) => e.id === pexId);
     if (pex) {
-      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight;
+      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight ?? pex.start_weight;
       setSetsState((prev) => ({
         ...prev,
         [pexId]: Array.from({ length: pex.sets }, () => ({
@@ -202,166 +202,112 @@ export default function WorkoutScreen() {
     else router.back();
   };
 
+  const active = activeIndex != null ? day.exercises[activeIndex] : null;
+  const timer = rest ? (
+    <RestTimer
+      key={rest.key}
+      seconds={rest.seconds}
+      onDone={() => setRest(null)}
+      onDismiss={() => setRest(null)}
+    />
+  ) : null;
+
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <IconButton onPress={doFinish} variant="ghost">
-          <X size={22} color={theme.text} />
-        </IconButton>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Txt variant="subtitle" numberOfLines={1}>
-            {day.title}
-          </Txt>
-          <Txt variant="caption" color="textTertiary">
-            {completedCount} из {totalCount} подходов · {elapsedStr}
-          </Txt>
-        </View>
-        <IconButton size={44} variant="ghost" onPress={() => setCoachWorkout(true)}>
-          <Sparkles size={20} color={theme.accent} />
-        </IconButton>
-      </View>
+      {active ? (
+        <ExerciseRunner
+          pex={active}
+          sets={setsState[active.id] ?? []}
+          suggestion={suggestions[active.id]}
+          position={{ index: activeIndex!, total: day.exercises.length }}
+          onPatchSet={(idx, patch) => patchSet(active.id, idx, patch)}
+          onToggleDone={(idx) => toggleDone(active.id, idx)}
+          onRepeatPrevious={(idx) => repeatPrevious(active.id, idx)}
+          onPickHistorySet={(w, r) => applyHistorySet(active.id, w, r)}
+          onSwap={() => setSwapTarget(active)}
+          onPlates={() => setPlate(num(setsState[active.id]?.[0]?.weight ?? '') ?? 20)}
+          onCoach={() => setCoachExercise(active)}
+          onBack={() => setActiveIndex(null)}
+          onNext={() => setActiveIndex((i) => Math.min(day.exercises.length - 1, (i ?? 0) + 1))}
+        />
+      ) : (
+        <>
+          <View style={styles.header}>
+            <IconButton onPress={doFinish} variant="ghost">
+              <X size={22} color={theme.text} />
+            </IconButton>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Txt variant="subtitle" numberOfLines={1}>
+                {day.title}
+              </Txt>
+              <Txt variant="caption" color="textTertiary">
+                {completedCount} из {totalCount} подходов · {elapsedStr}
+              </Txt>
+            </View>
+            <IconButton size={44} variant="ghost" onPress={() => setCoachWorkout(true)}>
+              <Sparkles size={20} color={theme.accent} />
+            </IconButton>
+          </View>
 
-      <View style={styles.progressRow}>
-        <View style={{ flex: 1 }}>
-          <ProgressBar progress={totalCount ? completedCount / totalCount : 0} height={10} />
-        </View>
-        <Txt variant="label" color="accent" rounded>
-          {pct}%
-        </Txt>
-      </View>
+          <View style={styles.progressRow}>
+            <View style={{ flex: 1 }}>
+              <ProgressBar progress={totalCount ? completedCount / totalCount : 0} height={10} />
+            </View>
+            <Txt variant="label" color="accent" rounded>
+              {pct}%
+            </Txt>
+          </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
-        {day.exercises.map((pex) => {
-          const sets = setsState[pex.id] ?? [];
-          const sug = suggestions[pex.id];
-          const topWeight = num(sets[0]?.weight ?? '') ?? sug?.weight ?? 0;
-          return (
-            <Card key={pex.id} padding="four">
-              <View style={styles.exHead}>
-                <Image
-                  source={THUMBS[pex.exercise_id]}
-                  style={styles.thumb}
-                  contentFit="cover"
-                  transition={120}
-                  cachePolicy="memory-disk"
-                />
-                <PressableScale haptic={false} onPress={() => setCoachExercise(pex)} style={{ flex: 1 }}>
-                  <Txt variant="bodyStrong" numberOfLines={2}>
-                    {pex.name_ru}
-                  </Txt>
-                  <Txt variant="caption" color="textSecondary">
-                    {pex.sets} подхода × {pex.rep_min}–{pex.rep_max} повт
-                  </Txt>
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            {day.exercises.map((pex, index) => {
+              const sets = setsState[pex.id] ?? [];
+              const done = sets.filter((s) => s.done).length;
+              const complete = done === sets.length && sets.length > 0;
+              return (
+                <PressableScale key={pex.id} pressedScale={0.98} onPress={() => setActiveIndex(index)}>
+                  <Card padding="three">
+                    <View style={styles.row}>
+                      <Image
+                        source={THUMBS[pex.exercise_id]}
+                        style={styles.thumb}
+                        contentFit="cover"
+                        transition={120}
+                        cachePolicy="memory-disk"
+                      />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Txt variant="bodyStrong" numberOfLines={2}>
+                          {pex.name_ru}
+                        </Txt>
+                        <Txt variant="caption" color="textSecondary">
+                          {getExercise(pex.exercise_id)?.muscleRu} · {pex.sets} × {pex.rep_min}–{pex.rep_max}
+                        </Txt>
+                      </View>
+                      {complete ? (
+                        <View style={[styles.badge, { backgroundColor: theme.accent }]}>
+                          <Check size={15} color={theme.accentOn} strokeWidth={3} />
+                        </View>
+                      ) : (
+                        <Txt variant="label" color={done ? 'accent' : 'textTertiary'} rounded>
+                          {done}/{sets.length}
+                        </Txt>
+                      )}
+                      <ChevronRight size={18} color={theme.textTertiary} />
+                    </View>
+                  </Card>
                 </PressableScale>
-                <IconButton size={38} onPress={() => setSwapTarget(pex)}>
-                  <Repeat2 size={16} color={theme.textSecondary} />
-                </IconButton>
-                <IconButton size={38} onPress={() => setPlate(topWeight || 20)}>
-                  <Scale size={16} color={theme.textSecondary} />
-                </IconButton>
-              </View>
+              );
+            })}
+          </ScrollView>
 
-              {sug?.reason ? (
-                <View style={[styles.hint, { backgroundColor: theme.accentMuted }]}>
-                  <Txt variant="caption" color="accent">
-                    {sug.reason}
-                  </Txt>
-                </View>
-              ) : null}
+          <View style={styles.footer}>
+            {timer}
+            <Button title="Завершить тренировку" onPress={doFinish} />
+          </View>
+        </>
+      )}
 
-              <View style={styles.gridHead}>
-                <Txt variant="micro" color="textTertiary" style={styles.colNum}>
-                  Сет
-                </Txt>
-                <Txt variant="micro" color="textTertiary" style={styles.colInput}>
-                  Вес
-                </Txt>
-                <Txt variant="micro" color="textTertiary" style={styles.colInput}>
-                  Повт
-                </Txt>
-                <View style={styles.colCheck} />
-              </View>
-
-              {sets.map((s, i) => (
-                <View key={i} style={styles.setRow}>
-                  {/* tapping the number repeats the set above it */}
-                  <PressableScale
-                    pressedScale={0.85}
-                    onPress={() => repeatPrevious(pex.id, i)}
-                    style={[styles.colNum, styles.numBtn, { backgroundColor: theme.backgroundElevated }]}>
-                    <Txt variant="label" color="textSecondary">
-                      {i + 1}
-                    </Txt>
-                  </PressableScale>
-                  <View style={styles.colInput}>
-                    <TextInput
-                      value={s.weight}
-                      onChangeText={(t) => patchSet(pex.id, i, { weight: t })}
-                      keyboardType="numeric"
-                      placeholder="—"
-                      placeholderTextColor={theme.textTertiary}
-                      selectionColor={theme.accent}
-                      style={[styles.input, { backgroundColor: theme.backgroundElevated, color: theme.text }]}
-                    />
-                  </View>
-                  <View style={styles.colInput}>
-                    <TextInput
-                      value={s.reps}
-                      onChangeText={(t) => patchSet(pex.id, i, { reps: t })}
-                      keyboardType="numeric"
-                      placeholder={String(pex.rep_min ?? '')}
-                      placeholderTextColor={theme.textTertiary}
-                      selectionColor={theme.accent}
-                      style={[styles.input, { backgroundColor: theme.backgroundElevated, color: theme.text }]}
-                    />
-                  </View>
-                  <View style={styles.colCheck}>
-                    <PressableScale
-                      onPress={() => toggleDone(pex.id, i)}
-                      pressedScale={0.85}
-                      style={[
-                        styles.check,
-                        {
-                          backgroundColor: s.done ? theme.accent : 'transparent',
-                          borderColor: s.done ? theme.accent : theme.border,
-                        },
-                      ]}>
-                      <Check size={18} color={s.done ? theme.accentOn : theme.textTertiary} strokeWidth={3} />
-                    </PressableScale>
-                  </View>
-                </View>
-              ))}
-
-              <View style={[styles.historyBlock, { borderTopColor: theme.border }]}>
-                <Txt variant="micro" color="textTertiary" style={{ marginBottom: Spacing.two }}>
-                  Прошлые тренировки · нажми, чтобы подставить
-                </Txt>
-                <SetHistory
-                  exerciseId={pex.exercise_id}
-                  limit={4}
-                  emptyHint="Это упражнение ещё не делал"
-                  onPickSet={(w, r) => applyHistorySet(pex.id, w, r)}
-                />
-              </View>
-            </Card>
-          );
-        })}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        {rest ? (
-          <RestTimer
-            key={rest.key}
-            seconds={rest.seconds}
-            onDone={() => setRest(null)}
-            onDismiss={() => setRest(null)}
-          />
-        ) : null}
-        <Button title="Завершить тренировку" onPress={doFinish} />
-      </View>
+      {/* rest timer floats above the runner so it survives switching exercises */}
+      {active && rest ? <View style={styles.floatingTimer}>{timer}</View> : null}
 
       {plate != null ? <PlateCalculator weight={plate} onClose={() => setPlate(null)} /> : null}
 
@@ -415,29 +361,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.five,
     paddingBottom: Spacing.three,
   },
-  content: {
-    paddingHorizontal: Spacing.five,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.eight,
-    gap: Spacing.four,
-  },
-  exHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  thumb: { width: 44, height: 44, borderRadius: Radius.md, backgroundColor: '#222' },
-  hint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: Radius.md, marginTop: Spacing.three },
-  gridHead: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.three, paddingHorizontal: Spacing.one },
-  colNum: { width: 36, alignItems: 'center', justifyContent: 'center' },
-  numBtn: { height: 46, borderRadius: Radius.md },
-  colInput: { flex: 1, paddingHorizontal: Spacing.one },
-  colCheck: { width: 52, alignItems: 'center' },
-  setRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.two, gap: 2 },
-  input: {
-    height: 46,
-    borderRadius: Radius.md,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  check: { width: 40, height: 40, borderRadius: Radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  historyBlock: { marginTop: Spacing.four, paddingTop: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
+  content: { paddingHorizontal: Spacing.five, paddingBottom: Spacing.six, gap: Spacing.three },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  thumb: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: '#222' },
+  badge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   footer: { paddingHorizontal: Spacing.five, paddingTop: Spacing.three, gap: Spacing.three },
+  floatingTimer: { position: 'absolute', left: Spacing.five, right: Spacing.five, bottom: 84 },
 });

@@ -35,6 +35,12 @@ export const PROFILE = {
   wantsCalisthenics: true,
   /** Every session ends with direct ab work. */
   absEveryWorkout: true,
+  /**
+   * Movements Влад doesn't want programmed: free-weight squats, deadlifts and
+   * bent-over rows. Smith machine, sled and machine versions stay.
+   */
+  excludedPatterns: [/squat/i, /deadlift/i, /bent.?over row/i, /good morning/i],
+  excludedWithEquipment: ['barbell', 'olympic barbell', 'trap bar', 'ez barbell'],
 } as const;
 
 export function age(on: Date = new Date()): number {

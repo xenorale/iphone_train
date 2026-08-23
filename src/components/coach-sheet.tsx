@@ -13,7 +13,6 @@ import { getExercise } from '@/lib/catalog';
 import { useApiKey } from '@/lib/ai/key';
 import { askCoach, type CoachScope } from '@/lib/ai/coach';
 import { AiError } from '@/lib/ai/openrouter';
-import { useSettings } from '@/lib/store/settings';
 
 const QUICK: Record<CoachScope, string[]> = {
   exercise: ['Не чувствую нагрузку', 'Что-то болит', 'Тяжело даётся', 'Чем заменить?'],
@@ -36,7 +35,6 @@ export function CoachSheet(props: CoachSheetProps) {
   const theme = useTheme();
   const router = useRouter();
   const hasKey = useApiKey((s) => s.hasKey);
-  const aiModel = useSettings((s) => s.aiModel);
   const exercise = props.exerciseId ? getExercise(props.exerciseId) : undefined;
 
   const [question, setQuestion] = useState('');
@@ -55,7 +53,6 @@ export function CoachSheet(props: CoachSheetProps) {
       const res = await askCoach({
         scope: props.scope,
         question: text,
-        model: aiModel,
         exerciseName: props.exerciseName,
         muscleRu: props.muscleRu,
         workoutTitle: props.workoutTitle,
