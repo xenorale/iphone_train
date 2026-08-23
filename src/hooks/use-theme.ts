@@ -1,14 +1,12 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * VOLT runs dark-first. We always return the dark palette so every screen is
+ * consistent regardless of the OS appearance setting.
  */
 
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return Colors[theme];
+  return Colors.dark;
 }
+
+export type Theme = ReturnType<typeof useTheme>;

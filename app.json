@@ -1,18 +1,22 @@
 {
   "expo": {
-    "name": "IPHONE-CLAUDE_TRAIN",
-    "slug": "IPHONE-CLAUDE_TRAIN",
+    "name": "VOLT",
+    "slug": "volt",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "iphoneclaudetrain",
-    "userInterfaceStyle": "automatic",
+    "scheme": "volt",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0B",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "supportsTablet": true,
+      "bundleIdentifier": "com.volt.fitness"
     },
     "android": {
+      "package": "com.volt.fitness",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,13 +32,17 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0A0A0B",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120,
           "android": {
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 100
           }
         }
-      ]
+      ],
+      "expo-sqlite",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
