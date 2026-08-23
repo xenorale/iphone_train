@@ -1,19 +1,23 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, Scale, Sparkles, X } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Repeat2, Scale, Sparkles, X } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CoachSheet } from '@/components/coach-sheet';
+import { ExerciseSwapSheet } from '@/components/exercise-swap-sheet';
 import { PlateCalculator } from '@/components/plate-calculator';
 import { RestTimer } from '@/components/rest-timer';
+import { SetHistory } from '@/components/set-history';
 import { Button, Card, IconButton, PressableScale, ProgressBar, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getExercise } from '@/lib/catalog';
-import { getProgramDay } from '@/lib/db/programs';
+import { getProgramDay, replaceProgramExercise } from '@/lib/db/programs';
 import { finishSession, startSession, upsertSet } from '@/lib/db/sessions';
+import { THUMBS } from '@/lib/gif-map';
 import { suggestNext, type Suggestion } from '@/lib/progression';
 import type { ProgramExerciseRow } from '@/lib/types';
 
@@ -28,43 +32,35 @@ const int = (s: string): number | null => {
   return Number.isFinite(v) ? v : null;
 };
 
+const targetOf = (pex: ProgramExerciseRow) => ({
+  sets: pex.sets,
+  repMin: pex.rep_min ?? 8,
+  repMax: pex.rep_max ?? 12,
+});
+
 export default function WorkoutScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const day = useMemo(() => getProgramDay(id), [id]);
+  const [day, setDay] = useState(() => getProgramDay(id));
+
   const suggestions = useMemo(() => {
     const m: Record<string, Suggestion> = {};
-    if (day) {
-      for (const pex of day.exercises) {
-        m[pex.id] = suggestNext(pex.exercise_id, {
-          sets: pex.sets,
-          repMin: pex.rep_min ?? 8,
-          repMax: pex.rep_max ?? 12,
-        });
-      }
-    }
+    for (const pex of day?.exercises ?? []) m[pex.id] = suggestNext(pex.exercise_id, targetOf(pex));
     return m;
   }, [day]);
 
   const [setsState, setSetsState] = useState<Record<string, SetEntry[]>>(() => {
     const map: Record<string, SetEntry[]> = {};
-    if (day) {
-      for (const pex of day.exercises) {
-        const w =
-          suggestNext(pex.exercise_id, {
-            sets: pex.sets,
-            repMin: pex.rep_min ?? 8,
-            repMax: pex.rep_max ?? 12,
-          }).weight ?? pex.start_weight;
-        map[pex.id] = Array.from({ length: pex.sets }, () => ({
-          weight: w != null ? String(w) : '',
-          reps: '',
-          done: false,
-        }));
-      }
+    for (const pex of day?.exercises ?? []) {
+      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight ?? pex.start_weight;
+      map[pex.id] = Array.from({ length: pex.sets }, () => ({
+        weight: w != null ? String(w) : '',
+        reps: '',
+        done: false,
+      }));
     }
     return map;
   });
@@ -74,23 +70,35 @@ export default function WorkoutScreen() {
   const [rest, setRest] = useState<{ key: number; seconds: number } | null>(null);
   const [plate, setPlate] = useState<number | null>(null);
   const [coachExercise, setCoachExercise] = useState<ProgramExerciseRow | null>(null);
+  const [swapTarget, setSwapTarget] = useState<ProgramExerciseRow | null>(null);
   const [coachWorkout, setCoachWorkout] = useState(false);
   const [startedAt] = useState(() => Date.now());
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
   }, []);
 
+  const dayId = day?.id;
+  const dayTitle = day?.title;
   useEffect(() => {
-    if (!day) return;
-    const sid = startSession(day.id, day.title);
+    if (!dayId || !dayTitle) return;
+    const sid = startSession(dayId, dayTitle);
     sessionRef.current = sid;
     return () => {
       if (!finishedRef.current) finishSession(sid);
     };
-  }, [day]);
+  }, [dayId, dayTitle]);
+
+  const patchSet = useCallback(
+    (pexId: string, idx: number, patch: Partial<SetEntry>) =>
+      setSetsState((prev) => ({
+        ...prev,
+        [pexId]: prev[pexId].map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+      })),
+    [],
+  );
 
   if (!day) {
     return (
@@ -98,16 +106,16 @@ export default function WorkoutScreen() {
         <Txt variant="body" color="textSecondary">
           Тренировка не найдена
         </Txt>
-        <Button title="Назад" variant="secondary" fullWidth={false} onPress={() => router.back()} style={{ marginTop: Spacing.four }} />
+        <Button
+          title="Назад"
+          variant="secondary"
+          fullWidth={false}
+          onPress={() => router.back()}
+          style={{ marginTop: Spacing.four }}
+        />
       </SafeAreaView>
     );
   }
-
-  const patchSet = (pexId: string, idx: number, patch: Partial<SetEntry>) =>
-    setSetsState((prev) => ({
-      ...prev,
-      [pexId]: prev[pexId].map((s, i) => (i === idx ? { ...s, ...patch } : s)),
-    }));
 
   const toggleDone = (pexId: string, idx: number) => {
     const pex = day.exercises.find((e) => e.id === pexId)!;
@@ -133,11 +141,52 @@ export default function WorkoutScreen() {
     if (done && pex.rest_seconds) setRest({ key: Date.now(), seconds: pex.rest_seconds });
   };
 
-  const completedCount = Object.values(setsState)
-    .flat()
-    .filter((s) => s.done).length;
-  const totalCount = Object.values(setsState)
-    .flat().length;
+  /** Copy the previous set's numbers into this row — the usual "same again" case. */
+  const repeatPrevious = (pexId: string, idx: number) => {
+    const rows = setsState[pexId];
+    const src = idx > 0 ? rows[idx - 1] : null;
+    if (src) {
+      patchSet(pexId, idx, { weight: src.weight, reps: src.reps });
+      return;
+    }
+    const sug = suggestions[pexId];
+    if (sug?.weight != null) patchSet(pexId, idx, { weight: String(sug.weight) });
+  };
+
+  /** Fill the first not-yet-completed row from a historical set. */
+  const applyHistorySet = (pexId: string, weight: number | null, reps: number | null) => {
+    const rows = setsState[pexId] ?? [];
+    const idx = rows.findIndex((r) => !r.done);
+    if (idx === -1) return;
+    patchSet(pexId, idx, {
+      weight: weight != null ? String(weight) : '',
+      reps: reps != null ? String(reps) : '',
+    });
+  };
+
+  const swapExercise = (pexId: string, exerciseId: string, nameRu: string) => {
+    replaceProgramExercise(pexId, exerciseId, nameRu);
+    const fresh = getProgramDay(day.id);
+    setDay(fresh);
+    const pex = fresh?.exercises.find((e) => e.id === pexId);
+    if (pex) {
+      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight;
+      setSetsState((prev) => ({
+        ...prev,
+        [pexId]: Array.from({ length: pex.sets }, () => ({
+          weight: w != null ? String(w) : '',
+          reps: '',
+          done: false,
+        })),
+      }));
+    }
+    queryClient.invalidateQueries({ queryKey: ['activeProgram'] });
+    setSwapTarget(null);
+  };
+
+  const allEntries = Object.values(setsState).flat();
+  const completedCount = allEntries.filter((s) => s.done).length;
+  const totalCount = allEntries.length;
   const pct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
   const elapsed = Math.floor((now - startedAt) / 1000);
   const elapsedStr = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
@@ -178,7 +227,10 @@ export default function WorkoutScreen() {
         </Txt>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
         {day.exercises.map((pex) => {
           const sets = setsState[pex.id] ?? [];
           const sug = suggestions[pex.id];
@@ -186,16 +238,23 @@ export default function WorkoutScreen() {
           return (
             <Card key={pex.id} padding="four">
               <View style={styles.exHead}>
+                <Image
+                  source={THUMBS[pex.exercise_id]}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  transition={120}
+                  cachePolicy="memory-disk"
+                />
                 <PressableScale haptic={false} onPress={() => setCoachExercise(pex)} style={{ flex: 1 }}>
-                  <Txt variant="bodyStrong" numberOfLines={1}>
+                  <Txt variant="bodyStrong" numberOfLines={2}>
                     {pex.name_ru}
                   </Txt>
                   <Txt variant="caption" color="textSecondary">
-                    {pex.sets} подхода × {pex.rep_min}–{pex.rep_max} повт · техника и ИИ
+                    {pex.sets} подхода × {pex.rep_min}–{pex.rep_max} повт
                   </Txt>
                 </PressableScale>
-                <IconButton size={38} onPress={() => setCoachExercise(pex)}>
-                  <Sparkles size={16} color={theme.accent} />
+                <IconButton size={38} onPress={() => setSwapTarget(pex)}>
+                  <Repeat2 size={16} color={theme.textSecondary} />
                 </IconButton>
                 <IconButton size={38} onPress={() => setPlate(topWeight || 20)}>
                   <Scale size={16} color={theme.textSecondary} />
@@ -210,7 +269,6 @@ export default function WorkoutScreen() {
                 </View>
               ) : null}
 
-              {/* grid header */}
               <View style={styles.gridHead}>
                 <Txt variant="micro" color="textTertiary" style={styles.colNum}>
                   Сет
@@ -226,9 +284,15 @@ export default function WorkoutScreen() {
 
               {sets.map((s, i) => (
                 <View key={i} style={styles.setRow}>
-                  <Txt variant="label" color="textSecondary" style={styles.colNum}>
-                    {i + 1}
-                  </Txt>
+                  {/* tapping the number repeats the set above it */}
+                  <PressableScale
+                    pressedScale={0.85}
+                    onPress={() => repeatPrevious(pex.id, i)}
+                    style={[styles.colNum, styles.numBtn, { backgroundColor: theme.backgroundElevated }]}>
+                    <Txt variant="label" color="textSecondary">
+                      {i + 1}
+                    </Txt>
+                  </PressableScale>
                   <View style={styles.colInput}>
                     <TextInput
                       value={s.weight}
@@ -267,6 +331,18 @@ export default function WorkoutScreen() {
                   </View>
                 </View>
               ))}
+
+              <View style={[styles.historyBlock, { borderTopColor: theme.border }]}>
+                <Txt variant="micro" color="textTertiary" style={{ marginBottom: Spacing.two }}>
+                  Прошлые тренировки · нажми, чтобы подставить
+                </Txt>
+                <SetHistory
+                  exerciseId={pex.exercise_id}
+                  limit={4}
+                  emptyHint="Это упражнение ещё не делал"
+                  onPickSet={(w, r) => applyHistorySet(pex.id, w, r)}
+                />
+              </View>
             </Card>
           );
         })}
@@ -286,6 +362,14 @@ export default function WorkoutScreen() {
 
       {plate != null ? <PlateCalculator weight={plate} onClose={() => setPlate(null)} /> : null}
 
+      {swapTarget ? (
+        <ExerciseSwapSheet
+          exerciseId={swapTarget.exercise_id}
+          onPick={(ex) => swapExercise(swapTarget.id, ex.id, ex.nameRu)}
+          onClose={() => setSwapTarget(null)}
+        />
+      ) : null}
+
       {coachExercise ? (
         <CoachSheet
           scope="exercise"
@@ -293,8 +377,7 @@ export default function WorkoutScreen() {
           subtitle="Упражнение"
           exerciseName={coachExercise.name_ru}
           muscleRu={getExercise(coachExercise.exercise_id)?.muscleRu}
-          gifImages={getExercise(coachExercise.exercise_id)?.images}
-          cues={getExercise(coachExercise.exercise_id)?.cues}
+          exerciseId={coachExercise.exercise_id}
           onClose={() => setCoachExercise(null)}
         />
       ) : null}
@@ -329,14 +412,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.five,
     paddingBottom: Spacing.three,
   },
-  content: { paddingHorizontal: Spacing.five, paddingTop: Spacing.two, paddingBottom: Spacing.eight, gap: Spacing.four },
+  content: {
+    paddingHorizontal: Spacing.five,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.eight,
+    gap: Spacing.four,
+  },
   exHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  thumb: { width: 44, height: 44, borderRadius: Radius.md, backgroundColor: '#222' },
   hint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: Radius.md, marginTop: Spacing.three },
   gridHead: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.three, paddingHorizontal: Spacing.one },
-  colNum: { width: 36, textAlign: 'center' },
+  colNum: { width: 36, alignItems: 'center', justifyContent: 'center' },
+  numBtn: { height: 46, borderRadius: Radius.md },
   colInput: { flex: 1, paddingHorizontal: Spacing.one },
   colCheck: { width: 52, alignItems: 'center' },
-  setRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.two },
+  setRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.two, gap: 2 },
   input: {
     height: 46,
     borderRadius: Radius.md,
@@ -345,5 +435,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   check: { width: 40, height: 40, borderRadius: Radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  historyBlock: { marginTop: Spacing.four, paddingTop: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
   footer: { paddingHorizontal: Spacing.five, paddingTop: Spacing.three, gap: Spacing.three },
 });

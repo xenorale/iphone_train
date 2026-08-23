@@ -132,3 +132,31 @@ export function exerciseHistory(exerciseId: string): HistoryPoint[] {
   }
   return [...bySession.values()].sort((a, b) => a.t - b.t);
 }
+
+export type SetLine = { weight: number | null; reps: number | null };
+export type ExerciseDayLog = { startedAt: number; sets: SetLine[] };
+
+/**
+ * Completed sets for one exercise, grouped by the session that logged them.
+ * Feeds the "what did I do last time" list under each exercise in a workout.
+ */
+export function exerciseDayLogs(exerciseId: string, limit = 8): ExerciseDayLog[] {
+  const rows = db.getAllSync<{ t: number; weight: number | null; reps: number | null }>(
+    `SELECT ws.started_at as t, ls.weight as weight, ls.reps as reps
+       FROM logged_sets ls
+       JOIN workout_sessions ws ON ws.id = ls.session_id
+      WHERE ls.exercise_id = ? AND ls.completed = 1
+      ORDER BY ws.started_at DESC, ls.set_index ASC`,
+    [exerciseId],
+  );
+
+  const byDay = new Map<number, SetLine[]>();
+  for (const r of rows) {
+    const arr = byDay.get(r.t);
+    if (arr) arr.push({ weight: r.weight, reps: r.reps });
+    else byDay.set(r.t, [{ weight: r.weight, reps: r.reps }]);
+  }
+  return [...byDay.entries()]
+    .slice(0, limit)
+    .map(([startedAt, sets]) => ({ startedAt, sets }));
+}

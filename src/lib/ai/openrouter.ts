@@ -50,12 +50,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Reliable free models on OpenRouter, tried in order when one is rate-limited. */
 export const FREE_FALLBACK_MODELS = [
-  'openai/gpt-oss-120b:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen3-next-80b-a3b-instruct:free',
-  'nousresearch/hermes-3-llama-3.1-405b:free',
-  'google/gemma-4-31b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'google/gemini-2.5-flash-lite',
+  'deepseek/deepseek-v4-flash',
 ];
 
 export async function chat({

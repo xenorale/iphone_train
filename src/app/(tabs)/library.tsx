@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip, Input, PressableScale, Txt } from '@/components/ui';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
-import { muscleGroups, searchExercises } from '@/lib/catalog';
+import { bodyParts, searchExercises } from '@/lib/catalog';
+import { THUMBS } from '@/lib/gif-map';
 import { useTheme } from '@/hooks/use-theme';
 import type { Exercise } from '@/lib/types';
 
@@ -15,10 +16,10 @@ export default function LibraryScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [muscle, setMuscle] = useState<string | null>(null);
+  const [bodyPart, setBodyPart] = useState<string | null>(null);
 
-  const groups = useMemo(() => muscleGroups(), []);
-  const results = useMemo(() => searchExercises({ query, muscle }), [query, muscle]);
+  const groups = useMemo(() => bodyParts(), []);
+  const results = useMemo(() => searchExercises({ query, bodyPart }), [query, bodyPart]);
 
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={['top']}>
@@ -46,13 +47,13 @@ export default function LibraryScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chips}>
-              <Chip label="Все" selected={!muscle} onPress={() => setMuscle(null)} />
+              <Chip label="Все" selected={!bodyPart} onPress={() => setBodyPart(null)} />
               {groups.map((g) => (
                 <Chip
                   key={g.key}
                   label={g.label}
-                  selected={muscle === g.key}
-                  onPress={() => setMuscle(muscle === g.key ? null : g.key)}
+                  selected={bodyPart === g.key}
+                  onPress={() => setBodyPart(bodyPart === g.key ? null : g.key)}
                 />
               ))}
             </ScrollView>
@@ -77,7 +78,7 @@ function ExerciseRow({ item, onPress }: { item: Exercise; onPress: () => void })
       onPress={onPress}
       pressedScale={0.98}
       style={[styles.row, { backgroundColor: theme.backgroundElement, borderColor: 'rgba(255,255,255,0.04)' }]}>
-      <Image source={item.images[0]} style={styles.thumb} contentFit="cover" transition={150} cachePolicy="memory-disk" />
+      <Image source={THUMBS[item.id]} style={styles.thumb} contentFit="cover" transition={150} cachePolicy="memory-disk" />
       <View style={styles.rowText}>
         <Txt variant="bodyStrong" numberOfLines={1}>
           {item.nameRu}

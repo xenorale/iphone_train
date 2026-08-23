@@ -5,12 +5,12 @@ import type { LoggedSetRow } from '@/lib/types';
 export type Target = { sets: number; repMin: number; repMax: number };
 export type Suggestion = { weight: number | null; reason: string };
 
-const LOWER_BODY = new Set(['Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Поясница']);
+const LOWER_BODY = new Set(['Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Разгибатели спины']);
 
 /** Weight increment for the next jump, based on the lift. */
 export function incrementFor(exerciseId: string): number {
   const ex = getExercise(exerciseId);
-  if (ex && LOWER_BODY.has(ex.muscleRu) && ex.mechanic === 'compound') return 5;
+  if (ex && LOWER_BODY.has(ex.muscleRu) && ex.compound) return 5;
   return 2.5;
 }
 

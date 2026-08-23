@@ -54,8 +54,8 @@ function allowedExercises(profile: Profile): Exercise[] {
 
   const out: Exercise[] = [];
   for (const list of byGroup.values()) {
-    // curated entries (with hand-written cues) first, then the rest
-    list.sort((a, b) => (b.cues.length ? 1 : 0) - (a.cues.length ? 1 : 0));
+    // compound lifts first so the model sees the staples of each group
+    list.sort((a, b) => Number(b.compound) - Number(a.compound));
     out.push(...list.slice(0, PER_GROUP));
   }
   return out;

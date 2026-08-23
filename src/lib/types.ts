@@ -4,18 +4,17 @@ export type Exercise = {
   id: string;
   name: string;
   nameRu: string;
+  /** Target muscle. */
   muscle: string;
   muscleRu: string;
   secondaryRu: string[];
   equipment: string;
   equipmentRu: string;
-  level: string;
-  levelRu: string;
-  mechanic: string | null;
-  category: string;
-  cues: string[];
-  instructionsEn: string[];
-  images: string[];
+  /** Coarse region ("upper legs", "chest") — used to group the library. */
+  bodyPart: string;
+  bodyPartRu: string;
+  /** Multi-joint lift: bigger weight jumps, longer rest. */
+  compound: boolean;
 };
 
 export type Units = 'kg' | 'lb';

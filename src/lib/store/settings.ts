@@ -5,13 +5,16 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Profile, Units } from '@/lib/types';
 
 export const AI_MODELS = [
-  { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (бесплатно)' },
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (бесплатно)' },
-  { id: 'qwen/qwen3-next-80b-a3b-instruct:free', label: 'Qwen3 80B (бесплатно)' },
-  { id: 'nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B (бесплатно)' },
-  { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (бесплатно)' },
-  { id: 'deepseek/deepseek-chat', label: 'DeepSeek (платно, стабильно)' },
+  { id: 'google/gemini-3.7-flash', label: 'Gemini 3.7 Flash — основная' },
+  { id: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash — дёшево и быстро' },
+  { id: 'minimax/minimax-m3', label: 'MiniMax M3 — быстрый' },
+  { id: 'deepseek/deepseek-v4-pro-0813', label: 'DeepSeek V4 Pro — умнее, дороже' },
+  { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5 — максимум качества' },
+  { id: 'nvidia/nemotron-3.5-lightning:free', label: 'Nemotron 3.5 Lightning (бесплатно)' },
 ] as const;
+
+/** Short, high-volume calls (food parsing) always run on the cheapest fast model. */
+export const FOOD_MODEL = 'google/gemini-2.5-flash-lite';
 
 export const DEFAULT_MODEL = AI_MODELS[0].id;
 

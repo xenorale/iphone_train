@@ -101,3 +101,14 @@ export function getProgramDay(dayId: string): LoadedDay | null {
     ),
   };
 }
+
+/**
+ * Swap one exercise inside the program for another (machine taken, sore joint,
+ * just don't feel like it). Sets/reps/rest stay — only the movement changes.
+ */
+export function replaceProgramExercise(pexId: string, exerciseId: string, nameRu: string) {
+  db.runSync(
+    'UPDATE program_exercises SET exercise_id = ?, name_ru = ?, start_weight = NULL WHERE id = ?',
+    [exerciseId, nameRu, pexId],
+  );
+}

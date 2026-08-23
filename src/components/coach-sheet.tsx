@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ExerciseGif } from '@/components/exercise-gif';
+import { MuscleMap } from '@/components/muscle-map';
 import { MarkdownLite } from '@/components/markdown-lite';
 import { Button, Chip, IconButton, Input, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { getExercise } from '@/lib/catalog';
 import { useApiKey } from '@/lib/ai/key';
 import { askCoach, type CoachScope } from '@/lib/ai/coach';
 import { AiError } from '@/lib/ai/openrouter';
@@ -22,8 +24,7 @@ export type CoachSheetProps = {
   scope: CoachScope;
   title: string;
   subtitle?: string;
-  gifImages?: string[];
-  cues?: string[];
+  exerciseId?: string;
   exerciseName?: string;
   muscleRu?: string;
   workoutTitle?: string;
@@ -36,6 +37,7 @@ export function CoachSheet(props: CoachSheetProps) {
   const router = useRouter();
   const hasKey = useApiKey((s) => s.hasKey);
   const aiModel = useSettings((s) => s.aiModel);
+  const exercise = props.exerciseId ? getExercise(props.exerciseId) : undefined;
 
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<string | null>(null);
@@ -87,21 +89,10 @@ export function CoachSheet(props: CoachSheetProps) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {props.gifImages?.length ? (
-                <View style={{ marginBottom: Spacing.four }}>
-                  <ExerciseGif images={props.gifImages} height={170} />
-                  {props.cues?.length ? (
-                    <View style={{ gap: Spacing.two, marginTop: Spacing.three }}>
-                      {props.cues.map((c, i) => (
-                        <View key={i} style={styles.cueRow}>
-                          <View style={[styles.dot, { backgroundColor: theme.accent }]} />
-                          <Txt variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                            {c}
-                          </Txt>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
+              {exercise ? (
+                <View style={{ marginBottom: Spacing.four, gap: Spacing.three }}>
+                  <ExerciseGif exerciseId={exercise.id} height={170} />
+                  <MuscleMap target={exercise.muscle} secondary={exercise.secondaryRu} height={110} />
                 </View>
               ) : null}
 
@@ -190,7 +181,5 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: Spacing.four, gap: Spacing.two },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  cueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
-  dot: { width: 5, height: 5, borderRadius: 3, marginTop: 7 },
   answer: { marginTop: Spacing.four, padding: Spacing.four, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth },
 });
