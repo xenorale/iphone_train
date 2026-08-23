@@ -5,6 +5,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 
 import { AddMetricSheet } from '@/components/add-metric-sheet';
 import { LineChart } from '@/components/line-chart';
+import { TrainingStats } from '@/components/training-stats';
 import { Button, Card, Divider, IconButton, PressableScale, Screen, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -58,6 +59,8 @@ export default function ProgressScreen() {
           <Plus size={20} color={theme.accentOn} />
         </IconButton>
       }>
+      <TrainingStats />
+
       {!metrics.length ? (
         <Card padding="eight">
           <View style={{ alignItems: 'center', gap: Spacing.three }}>

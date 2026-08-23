@@ -25,12 +25,15 @@ type SettingsState = {
   /** Weekday numbers (1 = Mon) used for training reminders. */
   trainingDays: number[];
   remindersEnabled: boolean;
+  /** Hour of day for the reminder, 24h. */
+  reminderHour: number;
   hydrated: boolean;
 
   setAiModel: (m: string) => void;
   setStrength: (s: StrengthAnchors) => void;
   setTrainingDays: (d: number[]) => void;
   setRemindersEnabled: (on: boolean) => void;
+  setReminderHour: (h: number) => void;
   setHydrated: () => void;
 };
 
@@ -41,12 +44,14 @@ export const useSettings = create<SettingsState>()(
       strength: {},
       trainingDays: [1, 3, 5],
       remindersEnabled: false,
+      reminderHour: 18,
       hydrated: false,
 
       setAiModel: (aiModel) => set({ aiModel }),
       setStrength: (strength) => set({ strength }),
       setTrainingDays: (trainingDays) => set({ trainingDays }),
       setRemindersEnabled: (remindersEnabled) => set({ remindersEnabled }),
+      setReminderHour: (reminderHour) => set({ reminderHour }),
       setHydrated: () => set({ hydrated: true }),
     }),
     {
@@ -57,6 +62,7 @@ export const useSettings = create<SettingsState>()(
         strength: s.strength,
         trainingDays: s.trainingDays,
         remindersEnabled: s.remindersEnabled,
+        reminderHour: s.reminderHour,
       }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },

@@ -65,3 +65,51 @@ export async function cancelAlert(id: string | null) {
     // already fired or cancelled
   }
 }
+
+const REMINDER_KIND = 'training-reminder';
+
+/** ISO weekday (1 = Mon) → iOS weekday (1 = Sun). */
+const toIosWeekday = (iso: number) => (iso % 7) + 1;
+
+async function cancelTrainingReminders() {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(
+    scheduled
+      .filter((n) => n.content.data?.kind === REMINDER_KIND)
+      .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+  );
+}
+
+/**
+ * Weekly "go train" nudges. Replaces any previously scheduled reminders and
+ * leaves rest-timer alerts alone.
+ */
+export async function syncTrainingReminders(
+  enabled: boolean,
+  isoWeekdays: number[],
+  hour: number,
+): Promise<boolean> {
+  await cancelTrainingReminders();
+  if (!enabled || !isoWeekdays.length) return true;
+  if (!(await ensurePermission())) return false;
+
+  await Promise.all(
+    isoWeekdays.map((iso) =>
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Сегодня тренировка',
+          body: 'Программа ждёт — открой VOLT и начинай',
+          sound: true,
+          data: { kind: REMINDER_KIND },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: toIosWeekday(iso),
+          hour,
+          minute: 0,
+        },
+      }),
+    ),
+  );
+  return true;
+}

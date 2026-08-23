@@ -1,16 +1,29 @@
 import { useRouter } from 'expo-router';
-import { Check, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react-native';
+import { Bell, Check, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, Switch, View } from 'react-native';
 
-import { Button, Card, Divider, Input, PressableScale, Screen, Txt } from '@/components/ui';
+import { Button, Card, Chip, Divider, Input, PressableScale, Screen, Txt } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/lib/ai/key';
 import { estimateOneRm } from '@/lib/ai/program';
 import { latestMetric } from '@/lib/db/metrics';
+import { syncTrainingReminders } from '@/lib/notifications';
 import { age, bmi, PROFILE } from '@/lib/profile';
 import { AI_MODELS, useSettings } from '@/lib/store/settings';
+
+const WEEKDAYS = [
+  { iso: 1, label: 'Пн' },
+  { iso: 2, label: 'Вт' },
+  { iso: 3, label: 'Ср' },
+  { iso: 4, label: 'Чт' },
+  { iso: 5, label: 'Пт' },
+  { iso: 6, label: 'Сб' },
+  { iso: 7, label: 'Вс' },
+];
+
+const HOURS = [8, 12, 16, 17, 18, 20];
 
 const STRENGTH_LABELS: Record<string, string> = {
   chest: 'Жим лёжа',
@@ -24,8 +37,43 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { hasKey, load, save, clear } = useApiKey();
-  const { aiModel, setAiModel, strength } = useSettings();
+  const {
+    aiModel,
+    setAiModel,
+    strength,
+    trainingDays,
+    setTrainingDays,
+    remindersEnabled,
+    setRemindersEnabled,
+    reminderHour,
+    setReminderHour,
+  } = useSettings();
   const [keyInput, setKeyInput] = useState('');
+  const [reminderError, setReminderError] = useState<string | null>(null);
+
+  const applyReminders = async (enabled: boolean, days: number[], hour: number) => {
+    const ok = await syncTrainingReminders(enabled, days, hour);
+    setReminderError(ok ? null : 'iOS не дал разрешение на уведомления — включи их в настройках телефона.');
+    if (!ok) setRemindersEnabled(false);
+  };
+
+  const onToggleReminders = (value: boolean) => {
+    setRemindersEnabled(value);
+    applyReminders(value, trainingDays, reminderHour);
+  };
+
+  const toggleDay = (iso: number) => {
+    const next = trainingDays.includes(iso)
+      ? trainingDays.filter((d) => d !== iso)
+      : [...trainingDays, iso].sort();
+    setTrainingDays(next);
+    applyReminders(remindersEnabled, next, reminderHour);
+  };
+
+  const onPickHour = (h: number) => {
+    setReminderHour(h);
+    applyReminders(remindersEnabled, trainingDays, h);
+  };
 
   useEffect(() => {
     load();
@@ -77,6 +125,59 @@ export default function SettingsScreen() {
           onPress={() => router.push('/new-program')}
           style={{ marginTop: Spacing.four }}
         />
+      </Card>
+
+      {/* REMINDERS */}
+      <Card padding="five">
+        <View style={styles.rowBetween}>
+          <View style={styles.rowIcon}>
+            <Bell size={18} color={theme.accent} />
+            <Txt variant="subtitle">Напоминания</Txt>
+          </View>
+          <Switch
+            value={remindersEnabled}
+            onValueChange={onToggleReminders}
+            trackColor={{ true: theme.accent, false: theme.backgroundSelected }}
+            thumbColor={theme.text}
+          />
+        </View>
+        <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two }}>
+          Пуш в дни тренировок. График плавающий — это просто напоминание, программа не
+          привязана к дням недели.
+        </Txt>
+
+        {remindersEnabled ? (
+          <>
+            <View style={styles.chips}>
+              {WEEKDAYS.map((d) => (
+                <Chip
+                  key={d.iso}
+                  label={d.label}
+                  selected={trainingDays.includes(d.iso)}
+                  onPress={() => toggleDay(d.iso)}
+                />
+              ))}
+            </View>
+            <Txt variant="micro" color="textTertiary" style={{ marginTop: Spacing.three }}>
+              Во сколько
+            </Txt>
+            <View style={styles.chips}>
+              {HOURS.map((h) => (
+                <Chip
+                  key={h}
+                  label={`${h}:00`}
+                  selected={reminderHour === h}
+                  onPress={() => onPickHour(h)}
+                />
+              ))}
+            </View>
+            {reminderError ? (
+              <Txt variant="caption" color="danger" style={{ marginTop: Spacing.three }}>
+                {reminderError}
+              </Txt>
+            ) : null}
+          </>
+        ) : null}
       </Card>
 
       {/* API KEY */}
@@ -163,4 +264,5 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 5, borderRadius: Radius.pill },
   link: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
   modelRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three, gap: Spacing.three },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.three },
 });

@@ -235,3 +235,51 @@ export function getSessionReview(sessionId: string): string | null {
   );
   return r?.review ?? null;
 }
+
+export type SessionSummaryRow = SessionRow & { sets: number; volume: number };
+
+/** Finished sessions with their headline numbers, newest first. */
+export function sessionHistory(limit = 60): SessionSummaryRow[] {
+  return db.getAllSync<SessionSummaryRow>(
+    `SELECT ws.*,
+            COUNT(ls.id) as sets,
+            COALESCE(SUM(ls.weight * ls.reps), 0) as volume
+       FROM workout_sessions ws
+       LEFT JOIN logged_sets ls ON ls.session_id = ws.id AND ls.completed = 1
+      WHERE ws.finished_at IS NOT NULL
+      GROUP BY ws.id
+      ORDER BY ws.started_at DESC
+      LIMIT ?`,
+    [limit],
+  );
+}
+
+export type ExerciseVolume = { exerciseId: string; sets: number; volume: number };
+
+/** Completed work per exercise since a timestamp — grouped into muscles by the caller. */
+export function volumeByExercise(since: number): ExerciseVolume[] {
+  return db.getAllSync<ExerciseVolume>(
+    `SELECT ls.exercise_id as exerciseId,
+            COUNT(*) as sets,
+            COALESCE(SUM(ls.weight * ls.reps), 0) as volume
+       FROM logged_sets ls
+       JOIN workout_sessions ws ON ws.id = ls.session_id
+      WHERE ls.completed = 1 AND ws.started_at >= ?
+      GROUP BY ls.exercise_id`,
+    [since],
+  );
+}
+
+/** Start-of-day timestamps for every finished session, for streaks and calendars. */
+export function trainingDays(since: number): number[] {
+  const rows = db.getAllSync<{ t: number }>(
+    'SELECT started_at as t FROM workout_sessions WHERE finished_at IS NOT NULL AND started_at >= ? ORDER BY started_at ASC',
+    [since],
+  );
+  const days = new Set<number>();
+  for (const r of rows) {
+    const d = new Date(r.t);
+    days.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
+  }
+  return [...days];
+}
