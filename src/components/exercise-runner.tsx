@@ -75,6 +75,8 @@ export function ExerciseRunner({
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled">
         <ExerciseGif exerciseId={pex.exercise_id} height={200} />
 

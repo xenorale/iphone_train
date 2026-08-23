@@ -67,6 +67,10 @@ export function Screen({
             contentContainerStyle,
           ]}
           showsVerticalScrollIndicator={false}
+          // iOS: поджимает контент под клавиатуру, чтобы поле не пряталось за ней
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           refreshControl={
             onRefresh ? (
               <RefreshControl

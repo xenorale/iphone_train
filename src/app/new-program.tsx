@@ -93,6 +93,8 @@ export default function NewProgramScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled">
         <View style={{ gap: Spacing.one }}>
           <Txt variant="title">Новая программа</Txt>

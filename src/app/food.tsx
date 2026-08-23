@@ -102,6 +102,8 @@ export default function FoodScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled">
           <Card padding="five">
             <View style={styles.rowBetween}>
