@@ -1,3 +1,15 @@
-# Expo HAS CHANGED
+# Expo SDK 54 — не обновлять
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
+Проект держится на Expo SDK 54 (React Native 0.81) намеренно. Доки читать
+здесь: https://docs.expo.dev/versions/v54.0.0/
+
+**Почему не апгрейдим:** Expo Go в App Store у владельца застрял на версии
+54.0.2 (обновления не приходят в его регионе), а Expo Go умеет открывать только
+проекты своей версии SDK. Любой апгрейд SDK убивает возможность проверять
+приложение по QR-коду — единственный быстрый способ увидеть правки на телефоне.
+
+Апгрейд до SDK 57 уже делался и откатывался (коммит `215ebb6`, откат `2fea601`).
+Если однажды понадобится — там всё готово, ломающая правка была ровно одна:
+`ThemeProvider` и `DarkTheme` переезжают из `@react-navigation/native` в
+`expo-router`. Но делать это стоит только вместе с переходом на development
+build, который от версии Expo Go не зависит.
