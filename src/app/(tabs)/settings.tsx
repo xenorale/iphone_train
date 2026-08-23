@@ -1,4 +1,5 @@
-import { Check, ExternalLink, KeyRound, Trash2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Check, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
@@ -6,12 +7,24 @@ import { Button, Card, Divider, Input, PressableScale, Screen, Txt } from '@/com
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useApiKey } from '@/lib/ai/key';
+import { estimateOneRm } from '@/lib/ai/program';
+import { latestMetric } from '@/lib/db/metrics';
+import { age, bmi, PROFILE } from '@/lib/profile';
 import { AI_MODELS, useSettings } from '@/lib/store/settings';
+
+const STRENGTH_LABELS: Record<string, string> = {
+  chest: 'Жим лёжа',
+  legs: 'Присед / жим ногами',
+  back: 'Тяга',
+  biceps: 'Бицепс',
+  triceps: 'Трицепс',
+};
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { hasKey, load, save, clear } = useApiKey();
-  const { units, setUnits, aiModel, setAiModel, profile, resetAll } = useSettings();
+  const { aiModel, setAiModel, strength } = useSettings();
   const [keyInput, setKeyInput] = useState('');
 
   useEffect(() => {
@@ -24,8 +37,48 @@ export default function SettingsScreen() {
     setKeyInput('');
   };
 
+  const bodyweight = latestMetric()?.bodyweight ?? PROFILE.fallbackBodyweight;
+  const anchors = Object.entries(strength).filter(([, v]) => v != null) as [string, number][];
+
   return (
     <Screen title="Ещё" subtitle="Настройки" tabBarSpacing>
+      {/* PROFILE */}
+      <Card padding="five">
+        <Txt variant="subtitle">{PROFILE.name}</Txt>
+        <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two }}>
+          {age()} лет · {PROFILE.heightCm} см · {bodyweight} кг · ИМТ {bmi(bodyweight)}
+        </Txt>
+        <Txt variant="caption" color="textTertiary" style={{ marginTop: 2 }}>
+          {PROFILE.daysPerWeek} тренировки в неделю по {PROFILE.sessionMinutes} мин
+        </Txt>
+
+        {anchors.length ? (
+          <View style={{ marginTop: Spacing.four, gap: Spacing.two }}>
+            <Txt variant="micro" color="accent">
+              Рабочие веса
+            </Txt>
+            {anchors.map(([k, v]) => (
+              <View key={k} style={styles.rowBetween}>
+                <Txt variant="caption" color="textSecondary">
+                  {STRENGTH_LABELS[k] ?? k}
+                </Txt>
+                <Txt variant="caption" color="textSecondary" rounded>
+                  {v} кг · 1ПМ ≈ {estimateOneRm(v)} кг
+                </Txt>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Button
+          title="Пересобрать программу"
+          variant="secondary"
+          icon={<RefreshCw size={16} color={theme.text} />}
+          onPress={() => router.push('/new-program')}
+          style={{ marginTop: Spacing.four }}
+        />
+      </Card>
+
       {/* API KEY */}
       <Card padding="five">
         <View style={styles.rowBetween}>
@@ -33,11 +86,7 @@ export default function SettingsScreen() {
             <KeyRound size={18} color={theme.accent} />
             <Txt variant="subtitle">Ключ OpenRouter</Txt>
           </View>
-          <View
-            style={[
-              styles.badge,
-              { backgroundColor: hasKey ? theme.successMuted : theme.dangerMuted },
-            ]}>
+          <View style={[styles.badge, { backgroundColor: hasKey ? theme.successMuted : theme.dangerMuted }]}>
             <Txt variant="micro" color={hasKey ? 'success' : 'danger'}>
               {hasKey ? 'Подключён' : 'Нет ключа'}
             </Txt>
@@ -82,7 +131,8 @@ export default function SettingsScreen() {
       <Card padding="five">
         <Txt variant="subtitle">Модель ИИ</Txt>
         <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two, marginBottom: Spacing.three }}>
-          Бесплатные модели подходят для генерации программ и разбора техники.
+          Используется для программы и разборов. Быстрые мелкие запросы (еда) всегда идут на самой
+          дешёвой модели.
         </Txt>
         {AI_MODELS.map((m, i) => (
           <View key={m.id}>
@@ -100,51 +150,11 @@ export default function SettingsScreen() {
         ))}
       </Card>
 
-      {/* UNITS */}
-      <Card padding="five">
-        <View style={styles.rowBetween}>
-          <Txt variant="subtitle">Единицы веса</Txt>
-          <View style={[styles.segment, { borderColor: theme.border }]}>
-            {(['kg', 'lb'] as const).map((u) => (
-              <PressableScale
-                key={u}
-                haptic={false}
-                onPress={() => setUnits(u)}
-                style={[styles.segmentItem, units === u && { backgroundColor: theme.accent }]}>
-                <Txt variant="label" color={units === u ? 'accentOn' : 'textSecondary'}>
-                  {u === 'kg' ? 'кг' : 'фунты'}
-                </Txt>
-              </PressableScale>
-            ))}
-          </View>
-        </View>
-      </Card>
-
-      {/* PROFILE */}
-      {profile ? (
-        <Card padding="five">
-          <Txt variant="subtitle">Профиль</Txt>
-          <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two }}>
-            Цель: {goalLabel(profile.goal)} · {profile.daysPerWeek} дн/нед · {profile.sessionMinutes} мин
-          </Txt>
-          <Button
-            title="Пройти онбординг заново"
-            variant="secondary"
-            onPress={resetAll}
-            style={{ marginTop: Spacing.three }}
-          />
-        </Card>
-      ) : null}
-
       <Txt variant="caption" color="textTertiary" center style={{ marginTop: Spacing.two }}>
         VOLT · v1.0.0
       </Txt>
     </Screen>
   );
-}
-
-function goalLabel(g: string) {
-  return { strength: 'Сила', muscle: 'Масса', fatloss: 'Сушка', general: 'Форма' }[g] ?? g;
 }
 
 const styles = StyleSheet.create({
@@ -153,6 +163,4 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 5, borderRadius: Radius.pill },
   link: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
   modelRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three, gap: Spacing.three },
-  segment: { flexDirection: 'row', borderRadius: Radius.pill, borderWidth: 1, padding: 2 },
-  segmentItem: { paddingHorizontal: Spacing.four, paddingVertical: 6, borderRadius: Radius.pill },
 });

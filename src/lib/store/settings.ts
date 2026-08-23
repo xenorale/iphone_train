@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import type { Profile, Units } from '@/lib/types';
+import type { StrengthAnchors } from '@/lib/types';
 
 export const AI_MODELS = [
   { id: 'google/gemini-3.7-flash', label: 'Gemini 3.7 Flash — основная' },
@@ -19,44 +19,44 @@ export const FOOD_MODEL = 'google/gemini-2.5-flash-lite';
 export const DEFAULT_MODEL = AI_MODELS[0].id;
 
 type SettingsState = {
-  units: Units;
   aiModel: string;
-  profile: Profile | null;
-  onboarded: boolean;
+  /** Working weights (kg) per lift — the model's starting point for loads. */
+  strength: StrengthAnchors;
+  /** Weekday numbers (1 = Mon) used for training reminders. */
+  trainingDays: number[];
+  remindersEnabled: boolean;
   hydrated: boolean;
 
-  setUnits: (u: Units) => void;
   setAiModel: (m: string) => void;
-  setProfile: (p: Profile) => void;
-  completeOnboarding: (p: Profile) => void;
-  resetAll: () => void;
+  setStrength: (s: StrengthAnchors) => void;
+  setTrainingDays: (d: number[]) => void;
+  setRemindersEnabled: (on: boolean) => void;
   setHydrated: () => void;
 };
 
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      units: 'kg',
       aiModel: DEFAULT_MODEL,
-      profile: null,
-      onboarded: false,
+      strength: {},
+      trainingDays: [1, 3, 5],
+      remindersEnabled: false,
       hydrated: false,
 
-      setUnits: (units) => set({ units }),
       setAiModel: (aiModel) => set({ aiModel }),
-      setProfile: (profile) => set({ profile }),
-      completeOnboarding: (profile) => set({ profile, onboarded: true }),
-      resetAll: () => set({ profile: null, onboarded: false }),
+      setStrength: (strength) => set({ strength }),
+      setTrainingDays: (trainingDays) => set({ trainingDays }),
+      setRemindersEnabled: (remindersEnabled) => set({ remindersEnabled }),
       setHydrated: () => set({ hydrated: true }),
     }),
     {
       name: 'volt-settings',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
-        units: s.units,
         aiModel: s.aiModel,
-        profile: s.profile,
-        onboarded: s.onboarded,
+        strength: s.strength,
+        trainingDays: s.trainingDays,
+        remindersEnabled: s.remindersEnabled,
       }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },

@@ -97,7 +97,7 @@ const EQUIP_RU = {
   'ez barbell': 'EZ-гриф',
   'smith machine': 'Смит',
   kettlebell: 'Гиря',
-  assisted: 'С поддержкой',
+  assisted: 'Гравитрон',
   weighted: 'С отягощением',
   'olympic barbell': 'Олимпийская штанга',
   'trap bar': 'Трэп-гриф',
@@ -196,10 +196,35 @@ if (KEY && pending.length) {
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// Hand fixes for names the translator gets wrong (idioms, mostly).
+const FIXES = {
+  'Мертвая бука': 'Мёртвый жук',
+  'Мертвый жук': 'Мёртвый жук',
+  'Супермен': 'Лодочка (супермен)',
+};
+
+// The model is inconsistent about ё; normalise the common stems.
+const YO = [
+  [/\bподъем/g, 'подъём'],
+  [/\bПодъем/g, 'Подъём'],
+  [/мертв/g, 'мёртв'],
+  [/Мертв/g, 'Мёртв'],
+  [/\bсведени[ея]\b/g, (m) => m],
+  [/жестк/g, 'жёстк'],
+  [/локтем\b/g, 'локтём'],
+];
+
+function normalizeName(raw) {
+  let s = raw.trim().replace(/\s+/g, ' ').replace(/\s+([,.)])/g, '$1');
+  if (FIXES[s]) s = FIXES[s];
+  for (const [re, to] of YO) s = s.replace(re, to);
+  return cap(s);
+}
+
 const out = src.map((e) => ({
   id: e.id,
   name: e.name,
-  nameRu: cache[e.name] || cap(e.name),
+  nameRu: normalizeName(cache[e.name] || e.name),
   muscle: e.target,
   muscleRu: TARGET_RU[e.target] ?? cap(e.target),
   secondaryRu: [...new Set((e.secondary || []).map((s) => SECONDARY_RU[s] ?? s))],
@@ -209,6 +234,82 @@ const out = src.map((e) => ({
   bodyPartRu: BODY_PART_RU[e.bodyPart] ?? cap(e.bodyPart),
   compound: COMPOUND_RE.test(e.name),
 }));
+
+// Distinct movements sometimes collapse to one phrase ("отжимания на брусьях"
+// covers chest dip, triceps dip, bench dip…). Ask the model to re-translate
+// those groups with the collision spelled out; results land in the same cache.
+async function resplitDuplicates() {
+  const groups = new Map();
+  for (const e of out) {
+    const arr = groups.get(e.nameRu);
+    if (arr) arr.push(e);
+    else groups.set(e.nameRu, [e]);
+  }
+  const clashes = [...groups.values()].filter((a) => a.length > 1);
+  if (!clashes.length) return;
+
+  console.log(`развожу ${clashes.length} групп одинаковых названий…`);
+  for (const group of clashes) {
+    const prompt =
+      `Эти упражнения РАЗНЫЕ, но перевелись одинаково («${group[0].nameRu}»). ` +
+      'Дай каждому своё короткое русское название, чтобы их нельзя было спутать. ' +
+      'Опирайся на целевую мышцу и вариант выполнения.\n' +
+      group.map((e) => `- ${e.name} (целевая: ${e.muscleRu}, инвентарь: ${e.equipmentRu})`).join('\n');
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: MODEL,
+          temperature: 0.3,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Ты переводишь названия силовых упражнений на русский, как их называют в зале. ' +
+                'Ответ — СТРОГО JSON-объект {"english":"русское"}, разные значения для разных ключей.',
+            },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const fixed = extractJson((await res.json()).choices[0].message.content);
+      for (const e of group) {
+        if (fixed[e.name]) {
+          cache[e.name] = fixed[e.name];
+          e.nameRu = normalizeName(fixed[e.name]);
+        }
+      }
+    } catch (err) {
+      console.warn(`  группа «${group[0].nameRu}» не разошлась: ${err.message}`);
+    }
+  }
+  writeFileSync(CACHE, JSON.stringify(cache, null, 2), 'utf8');
+}
+
+if (KEY) await resplitDuplicates();
+
+// Whatever still collides gets a qualifier — target muscle first, equipment
+// second. Never a bare number: "Отжимания · своё тело 4" reads like a bug.
+const counts = new Map();
+for (const e of out) counts.set(e.nameRu, (counts.get(e.nameRu) ?? 0) + 1);
+const used = new Set(out.filter((e) => counts.get(e.nameRu) === 1).map((e) => e.nameRu));
+for (const e of out) {
+  if (counts.get(e.nameRu) === 1) continue;
+  for (const candidate of [
+    `${e.nameRu} (${e.muscleRu.toLowerCase()})`,
+    `${e.nameRu} · ${e.equipmentRu.toLowerCase()}`,
+    `${e.nameRu} (${e.muscleRu.toLowerCase()}, ${e.equipmentRu.toLowerCase()})`,
+    `${e.nameRu} — ${e.name}`,
+  ]) {
+    if (!used.has(candidate)) {
+      e.nameRu = candidate;
+      break;
+    }
+  }
+  used.add(e.nameRu);
+}
 
 writeFileSync(OUT, JSON.stringify(out), 'utf8');
 

@@ -48,7 +48,7 @@ export default function RootLayout() {
                 name="workout/[id]"
                 options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
               />
-              <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+              <Stack.Screen name="new-program" options={{ animation: 'fade' }} />
             </Stack>
           </ThemeProvider>
         </QueryClientProvider>

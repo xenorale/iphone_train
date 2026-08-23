@@ -45,7 +45,7 @@ export default function ProgramScreen() {
             <Txt variant="body" color="textSecondary" center>
               Сгенерируй недельный план — он появится здесь с разбивкой по дням.
             </Txt>
-            <Button title="Сгенерировать" onPress={() => router.push('/onboarding')} fullWidth={false} />
+            <Button title="Сгенерировать" onPress={() => router.push('/new-program')} fullWidth={false} />
           </View>
         </Card>
       </Screen>
@@ -102,7 +102,7 @@ export default function ProgramScreen() {
                       queryClient.invalidateQueries({ queryKey: ['activeProgram'] });
                     }}
                   />
-                  <Button title="Перегенерировать программу" variant="secondary" onPress={() => router.push('/onboarding')} />
+                  <Button title="Перегенерировать программу" variant="secondary" onPress={() => router.push('/new-program')} />
                 </View>
               ) : null}
             </View>
@@ -118,7 +118,7 @@ export default function ProgramScreen() {
         title="Перегенерировать программу"
         variant="secondary"
         icon={<RefreshCw size={16} color={theme.text} />}
-        onPress={() => router.push('/onboarding')}
+        onPress={() => router.push('/new-program')}
         style={{ marginTop: Spacing.two }}
       />
     </Screen>

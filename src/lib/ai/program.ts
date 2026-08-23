@@ -1,6 +1,13 @@
 import { EXERCISES, getExercise } from '@/lib/catalog';
-import type { Exercise, Goal, Phase, Profile } from '@/lib/types';
-import { AiError, chatWithFallback, extractJson, FREE_FALLBACK_MODELS, type ChatMessage } from './openrouter';
+import { age, bmi, PROFILE } from '@/lib/profile';
+import type { Exercise, Phase, StrengthAnchors } from '@/lib/types';
+import {
+  AiError,
+  chatWithFallback,
+  extractJson,
+  FREE_FALLBACK_MODELS,
+  type ChatMessage,
+} from './openrouter';
 import { aiProgramSchema } from './schemas';
 
 export type GeneratedExercise = {
@@ -17,7 +24,7 @@ export type GeneratedExercise = {
 export type GeneratedDay = { title: string; focus?: string; exercises: GeneratedExercise[] };
 export type GeneratedProgram = {
   name: string;
-  goal: Goal;
+  goal: string;
   daysPerWeek: number;
   days: GeneratedDay[];
   phase?: Phase;
@@ -25,26 +32,26 @@ export type GeneratedProgram = {
   weeks: number;
 };
 
-const GOAL_RU: Record<Goal, string> = {
-  strength: 'максимальная сила',
-  muscle: 'набор мышечной массы (гипертрофия)',
-  fatloss: 'снижение жира с сохранением мышц',
-  general: 'общая физическая форма и здоровье',
+export type ProgramInput = {
+  strength: StrengthAnchors;
+  bodyweight: number;
 };
 
-const EXP_RU = { beginner: 'новичок', intermediate: 'средний уровень', advanced: 'продвинутый' };
+/** Epley, reversed: a working weight for ~7 reps implies this one-rep max. */
+export function estimateOneRm(workingWeight: number, reps = 7): number {
+  return Math.round(workingWeight * (1 + reps / 30));
+}
 
 /**
- * A COMPACT pool for the prompt — the full catalog (~870) is far too big to send.
- * Filter by equipment, then keep ~6 per muscle group (curated staples first) so
- * every group + cardio + abs is represented while the prompt stays small & fast.
+ * A COMPACT pool for the prompt — the full catalog (1324) is far too big to
+ * send. Filter by the gym's equipment, then keep a handful per muscle so every
+ * group, plus abs and calisthenics, stays represented.
  */
-function allowedExercises(profile: Profile): Exercise[] {
-  const eq = profile.equipment;
-  let pool = eq.length ? EXERCISES.filter((e) => eq.includes(e.equipment)) : EXERCISES;
-  if (pool.length < 20) pool = EXERCISES;
+function allowedExercises(): Exercise[] {
+  const gymEquipment: readonly string[] = PROFILE.equipment;
+  const pool = EXERCISES.filter((e) => gymEquipment.includes(e.equipment));
 
-  const PER_GROUP = 6;
+  const PER_GROUP = 8;
   const byGroup = new Map<string, Exercise[]>();
   for (const e of pool) {
     const arr = byGroup.get(e.muscleRu);
@@ -54,67 +61,68 @@ function allowedExercises(profile: Profile): Exercise[] {
 
   const out: Exercise[] = [];
   for (const list of byGroup.values()) {
-    // compound lifts first so the model sees the staples of each group
+    // compound staples first — they anchor each session
     list.sort((a, b) => Number(b.compound) - Number(a.compound));
     out.push(...list.slice(0, PER_GROUP));
   }
-  return out;
+
+  // guarantee bodyweight pulling/pushing is on the menu for the calisthenics part
+  const calisthenics = pool
+    .filter((e) => e.equipment === 'body weight' && e.compound && !out.includes(e))
+    .slice(0, 12);
+  return [...out, ...calisthenics];
 }
 
-function buildMessages(profile: Profile, repair?: string): ChatMessage[] {
-  const pool = allowedExercises(profile);
+function buildMessages(input: ProgramInput, repair?: string): ChatMessage[] {
+  const pool = allowedExercises();
   const catalog = pool
     .map((e) => `- ${e.id} — ${e.nameRu} (${e.muscleRu}, ${e.equipmentRu})`)
     .join('\n');
 
-  const system =
-    'Ты опытный тренер по силовым тренировкам и специалист по композиции тела. Ты составляешь тренировочные мезоциклы. ' +
-    'Отвечай СТРОГО валидным JSON по заданной схеме. Без markdown, без комментариев, без текста вне JSON.';
-
-  const SEX_RU = { male: 'мужской', female: 'женский', unknown: 'не указан' } as const;
-  const s = profile.strength;
+  const s = input.strength;
+  const anchor = (label: string, kg?: number) =>
+    kg != null ? `${label}: рабочий ${kg} кг × 6–8 → примерный 1ПМ ${estimateOneRm(kg)} кг` : null;
   const anchors =
     [
-      s.chest != null ? `грудь (жим) ${s.chest} кг` : null,
-      s.legs != null ? `ноги (присед/жим ногами) ${s.legs} кг` : null,
-      s.back != null ? `спина (тяга) ${s.back} кг` : null,
-      s.biceps != null ? `бицепс ${s.biceps} кг` : null,
-      s.triceps != null ? `трицепс ${s.triceps} кг` : null,
+      anchor('Грудь (жим)', s.chest),
+      anchor('Ноги (присед/жим ногами)', s.legs),
+      anchor('Спина (тяга)', s.back),
+      anchor('Бицепс', s.biceps),
+      anchor('Трицепс', s.triceps),
     ]
       .filter(Boolean)
-      .join(', ') || 'не указаны — оцени по массе тела, полу и опыту';
-  const body = [
-    `пол: ${SEX_RU[profile.sex]}`,
-    profile.bodyweight != null ? `вес тела: ${profile.bodyweight} кг` : 'вес тела: не указан',
-    profile.height != null ? `рост: ${profile.height} см` : null,
-  ]
-    .filter(Boolean)
-    .join(', ');
+      .join('\n') || 'не указаны — оцени по массе тела, росту, возрасту и полу';
+
+  const system =
+    'Ты опытный тренер по силовым тренировкам и специалист по композиции тела. ' +
+    'Ты составляешь тренировочные мезоциклы. ' +
+    'Отвечай СТРОГО валидным JSON по заданной схеме. Без markdown, без комментариев, без текста вне JSON.';
 
   const user = `Составь тренировочный мезоцикл (повторяющаяся недельная программа) на 2–3 месяца.
 
-Профиль:
-- Цель пользователя: ${GOAL_RU[profile.goal]}
-- Уровень: ${EXP_RU[profile.experience]}
-- Данные тела: ${body}
-- Текущие рабочие веса (вес примерно на 6–8 повторов, НЕ разовый максимум): ${anchors}
-- Тренировок в неделю: ${profile.daysPerWeek}
-- Длительность тренировки: ~${profile.sessionMinutes} минут
+Кто тренируется:
+- ${PROFILE.name}, ${age()} лет, мужчина, рост ${PROFILE.heightCm} см, вес ${input.bodyweight} кг (ИМТ ${bmi(input.bodyweight)})
+- Цель: ${PROFILE.goal}
+- Тренировок в неделю: ${PROFILE.daysPerWeek}, по ~${PROFILE.sessionMinutes} минут
+- Зал полностью оборудован
 
-Используй ТОЛЬКО упражнения из этого списка (поле exerciseId должно быть точным id слева):
+Текущие силовые:
+${anchors}
+
+Используй ТОЛЬКО упражнения из этого списка (exerciseId должен быть точным id слева):
 ${catalog}
 
 Правила:
-- ФАЗА (phase) должна СООТВЕТСТВОВАТЬ цели: «масса» → "bulk", «сушка» → "cut", «сила» → "bulk", «форма» → "recomp". НЕ ставь "maintain" без веской причины (поддержание — только если человек уже в форме и явно не хочет менять состав тела). В phaseReason 1–2 предложениями по-русски объясни выбор.
-- weeks — длительность мезоцикла в неделях (8–12).
-- Ровно ${profile.daysPerWeek} тренировочных дней (массив days длиной ${profile.daysPerWeek}).
-- На каждый день 5–8 упражнений, базовые (многосуставные) в начале.
-- ОБЯЗАТЕЛЬНО в каждом дне: минимум 1 упражнение на пресс (группа «Пресс») и 1 кардио (группа «Кардио») — в конец тренировки. Для cut кардио больше.
-- Для кардио в note укажи длительность; sets=1, repMin=1, repMax=1, startWeight=0.
-- Диапазон повторений под фазу: сила 3–6, набор 6–12, сушка 10–15, форма 8–12.
-- Для КАЖДОГО упражнения укажи startWeight — рекомендуемый стартовый рабочий вес в кг на первый рабочий подход, исходя из текущих силовых, массы тела, пола и опыта. Свой вес и кардио — startWeight=0.
-- Укажи rpe (7–9) и restSec: база 120–180, изоляция 60–90.
-- Сбалансируй группы мышц по неделе.
+- Ровно ${PROFILE.daysPerWeek} тренировочных дней (массив days длиной ${PROFILE.daysPerWeek}).
+- 6–8 упражнений в день, тяжёлая база в начале, изоляция в конце.
+- ОБЯЗАТЕЛЬНО в каждом дне минимум одно упражнение на пресс (группа «Пресс»).
+- ОБЯЗАТЕЛЬНО в каждом дне 1–2 упражнения с собственным весом (подтягивания, брусья, отжимания) — вперемешку с железом, а не отдельным блоком в конце.
+- Веса задавай через проценты от 1ПМ: база 75–85% (5–8 повторов), изоляция 60–70% (10–14 повторов). startWeight считай в кг от указанного 1ПМ и округляй до 2.5 кг.
+- Своё тело и кардио — startWeight = 0.
+- Цель совмещает рельеф и силу → phase = "recomp", если нет веской причины иначе. В phaseReason объясни выбор 1–2 предложениями по-русски.
+- weeks — длительность мезоцикла (8–12).
+- Укажи rpe (7–9) и restSec: база 150–210, изоляция 60–90.
+- Сбалансируй жим и тягу по неделе, ноги не пропускай.
 - note — короткая подсказка по-русски (необязательно).
 
 Схема JSON:
@@ -128,7 +136,7 @@ ${catalog}
       "title": "string — напр. 'День 1 — Грудь и трицепс'",
       "focus": "string — основные группы",
       "exercises": [
-        { "exerciseId": "id из списка", "sets": 4, "repMin": 6, "repMax": 10, "rpe": 8, "restSec": 120, "startWeight": 40, "note": "" }
+        { "exerciseId": "id из списка", "sets": 4, "repMin": 6, "repMax": 10, "rpe": 8, "restSec": 150, "startWeight": 60, "note": "" }
       ]
     }
   ]
@@ -141,19 +149,21 @@ ${catalog}
 }
 
 function resolveExercise(id: string): { id: string; nameRu: string } | null {
-  if (!id || id.trim().length < 2) return null;
-  const direct = getExercise(id);
+  if (!id || id.trim().length < 1) return null;
+  const direct = getExercise(id.trim());
   if (direct) return { id: direct.id, nameRu: direct.nameRu };
-  // fuzzy fallback: match against id / english / russian names
-  const lc = id.toLowerCase().replace(/[_\s]+/g, '-');
+  // ids are zero-padded ("0007"); models like to drop the padding
+  const padded = getExercise(id.trim().padStart(4, '0'));
+  if (padded) return { id: padded.id, nameRu: padded.nameRu };
+  const lc = id.toLowerCase().trim();
   const found =
-    EXERCISES.find((e) => e.id === lc) ||
-    EXERCISES.find((e) => e.id.includes(lc) || lc.includes(e.id)) ||
-    EXERCISES.find((e) => e.nameRu.toLowerCase().includes(id.toLowerCase()));
+    EXERCISES.find((e) => e.nameRu.toLowerCase() === lc) ||
+    EXERCISES.find((e) => e.name.toLowerCase() === lc) ||
+    EXERCISES.find((e) => e.nameRu.toLowerCase().includes(lc));
   return found ? { id: found.id, nameRu: found.nameRu } : null;
 }
 
-function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>, profile: Profile): GeneratedProgram {
+function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>): GeneratedProgram {
   const days: GeneratedDay[] = [];
   for (const d of parsed.days) {
     const exercises: GeneratedExercise[] = [];
@@ -179,7 +189,7 @@ function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>, profile: Pr
   if (!days.length) throw new AiError('PARSE', 'no resolvable exercises');
   return {
     name: parsed.name,
-    goal: profile.goal,
+    goal: PROFILE.goal,
     daysPerWeek: days.length,
     days,
     phase: parsed.phase,
@@ -189,16 +199,14 @@ function normalize(parsed: ReturnType<typeof aiProgramSchema.parse>, profile: Pr
 }
 
 /** Generate a weekly program. Validates JSON and retries once on failure. */
-export async function generateProgram(profile: Profile, model: string): Promise<GeneratedProgram> {
+export async function generateProgram(input: ProgramInput, model: string): Promise<GeneratedProgram> {
   const models = [...new Set([model, ...FREE_FALLBACK_MODELS])];
   const attempt = async (repair?: string) => {
     const { content } = await chatWithFallback(
-      { messages: buildMessages(profile, repair), temperature: 0.5, maxTokens: 4000 },
+      { messages: buildMessages(input, repair), temperature: 0.5, maxTokens: 5000 },
       models,
     );
-    const json = extractJson(content);
-    const parsed = aiProgramSchema.parse(json);
-    return normalize(parsed, profile);
+    return normalize(aiProgramSchema.parse(extractJson(content)));
   };
 
   try {

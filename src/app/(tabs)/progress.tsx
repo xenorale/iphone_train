@@ -9,7 +9,6 @@ import { Button, Card, Divider, IconButton, PressableScale, Screen, Txt } from '
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { allMetrics, deleteMetric, type Measurements } from '@/lib/db/metrics';
-import { useSettings } from '@/lib/store/settings';
 
 const M_LABELS: Record<keyof Measurements, string> = {
   waist: 'Талия',
@@ -22,8 +21,7 @@ const M_LABELS: Record<keyof Measurements, string> = {
 export default function ProgressScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const units = useSettings((s) => s.units);
-  const unit = units === 'kg' ? 'кг' : 'lb';
+  const unit = 'кг';
   const [sheet, setSheet] = useState(false);
 
   const { data: metrics = [] } = useQuery({ queryKey: ['metrics'], queryFn: () => allMetrics() });

@@ -17,32 +17,14 @@ export type Exercise = {
   compound: boolean;
 };
 
-export type Units = 'kg' | 'lb';
-
-export type Goal = 'strength' | 'muscle' | 'fatloss' | 'general';
-export type Experience = 'beginner' | 'intermediate' | 'advanced';
-export type Sex = 'male' | 'female' | 'unknown';
 export type Phase = 'cut' | 'bulk' | 'recomp' | 'maintain';
 
-/** Working weights (kg) по основным группам, ~6–8 повторов; undefined = «не знаю». */
 export type StrengthAnchors = {
   chest?: number;
   legs?: number;
   back?: number;
   biceps?: number;
   triceps?: number;
-};
-
-export type Profile = {
-  goal: Goal;
-  experience: Experience;
-  daysPerWeek: number;
-  equipment: string[]; // equipment keys available
-  sessionMinutes: number;
-  sex: Sex;
-  bodyweight?: number;
-  height?: number;
-  strength: StrengthAnchors;
 };
 
 // ---- DB row types ----
