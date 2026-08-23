@@ -1,5 +1,12 @@
 import { ChevronLeft, Check, Repeat2, Scale, Sparkles } from 'lucide-react-native';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ExerciseGif } from '@/components/exercise-gif';
 import { MuscleMap } from '@/components/muscle-map';
@@ -53,8 +60,26 @@ export function ExerciseRunner({
   const doneCount = sets.filter((s) => s.done).length;
   const isLast = position.index === position.total - 1;
 
+  // drag from the left edge to go back, the way a pushed screen behaves
+  const dragX = useSharedValue(0);
+  const swipeBack = Gesture.Pan()
+    .activeOffsetX(20)
+    .failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      if (e.absoluteX - e.translationX < 60) dragX.value = Math.max(0, e.translationX);
+    })
+    .onEnd((e) => {
+      if (dragX.value > 80 || e.velocityX > 800) {
+        dragX.value = withTiming(400, { duration: 160 }, () => runOnJS(onBack)());
+      } else {
+        dragX.value = withTiming(0, { duration: 140 });
+      }
+    });
+  const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.value }] }));
+
   return (
-    <View style={[styles.fill, { backgroundColor: theme.background }]}>
+    <GestureDetector gesture={swipeBack}>
+      <Animated.View style={[styles.fill, dragStyle, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
         <IconButton onPress={onBack} variant="ghost">
           <ChevronLeft size={22} color={theme.text} />
@@ -194,19 +219,20 @@ export function ExerciseRunner({
         </Card>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Button
-          title={isLast ? 'К списку упражнений' : 'Следующее упражнение'}
-          variant={doneCount === sets.length ? 'primary' : 'secondary'}
-          onPress={isLast ? onBack : onNext}
-        />
-      </View>
-    </View>
+        <View style={styles.footer}>
+          <Button
+            title={isLast ? 'К списку упражнений' : 'Следующее упражнение'}
+            variant={doneCount === sets.length ? 'primary' : 'secondary'}
+            onPress={isLast ? onBack : onNext}
+          />
+        </View>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { ...StyleSheet.absoluteFillObject },
+  fill: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
