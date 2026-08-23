@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { ArrowRight, CalendarCheck, ChevronRight, Dumbbell, Sparkles, Utensils } from 'lucide-react-native';
+import { ArrowRight, CalendarCheck, ChevronRight, Dumbbell, Play, Sparkles, Utensils } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Card, PressableScale, Screen, Txt } from '@/components/ui';
@@ -8,7 +8,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { todayISO, totalsForDate } from '@/lib/db/food';
 import { latestMetric } from '@/lib/db/metrics';
-import { sessionCountSince } from '@/lib/db/sessions';
+import { openSession, sessionCountSince } from '@/lib/db/sessions';
 import { dailyTargets } from '@/lib/nutrition';
 import { useActiveProgram } from '@/lib/hooks/use-active-program';
 import { age, PROFILE } from '@/lib/profile';
@@ -32,11 +32,33 @@ export default function TodayScreen() {
     queryFn: () => latestMetric()?.bodyweight ?? PROFILE.fallbackBodyweight,
   });
   const targets = dailyTargets(bodyweight ?? PROFILE.fallbackBodyweight);
+  const { data: unfinished } = useQuery({ queryKey: ['openSession'], queryFn: () => openSession() });
   const nextDay = program?.days.length ? program.days[done % program.days.length] : null;
   const week = program?.days.length ? Math.floor(done / program.days.length) + 1 : 1;
 
   return (
     <Screen title="Сегодня" subtitle="VOLT" tabBarSpacing>
+      {unfinished?.program_day_id ? (
+        <PressableScale
+          pressedScale={0.98}
+          onPress={() => router.push(`/workout/${unfinished.program_day_id}`)}>
+          <Card variant="accent" padding="five">
+            <View style={styles.heroRow}>
+              <Play size={16} color={theme.accent} fill={theme.accent} />
+              <Txt variant="micro" color="accent">
+                Тренировка не закончена
+              </Txt>
+            </View>
+            <Txt variant="subtitle" style={{ marginTop: Spacing.two }}>
+              {unfinished.title ?? 'Тренировка'}
+            </Txt>
+            <Txt variant="caption" color="textSecondary" style={{ marginTop: 2 }}>
+              Нажми, чтобы продолжить с того же места
+            </Txt>
+          </Card>
+        </PressableScale>
+      ) : null}
+
       {program && nextDay ? (
         <>
           <Txt variant="micro" color="textTertiary">

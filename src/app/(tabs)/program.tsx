@@ -13,7 +13,7 @@ import { useActiveProgram } from '@/lib/hooks/use-active-program';
 const PHASE_RU: Record<string, string> = {
   cut: 'Сушка',
   bulk: 'Набор массы',
-  recomp: 'Рекомпозиция',
+  recomp: 'Рельеф + сила',
   maintain: 'Поддержание',
 };
 

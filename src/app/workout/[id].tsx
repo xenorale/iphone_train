@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronRight, Sparkles, X } from 'lucide-react-native';
+import { Check, ChevronRight, Minimize2, Sparkles, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoachSheet } from '@/components/coach-sheet';
@@ -16,7 +16,15 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getExercise } from '@/lib/catalog';
 import { getProgramDay, replaceProgramExercise } from '@/lib/db/programs';
-import { finishSession, startSession, upsertSet } from '@/lib/db/sessions';
+import {
+  cancelSession,
+  discardIfEmpty,
+  finishSession,
+  openSessionForDay,
+  setsForSession,
+  startSession,
+  upsertSet,
+} from '@/lib/db/sessions';
 import { THUMBS } from '@/lib/gif-map';
 import { suggestNext, type Suggestion } from '@/lib/progression';
 import type { ProgramExerciseRow } from '@/lib/types';
@@ -48,21 +56,35 @@ export default function WorkoutScreen() {
   /** null = overview list, number = that exercise full screen */
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
+  const since = day?.programCreatedAt ?? 0;
   const suggestions = useMemo(() => {
     const m: Record<string, Suggestion> = {};
-    for (const pex of day?.exercises ?? []) m[pex.id] = suggestNext(pex.exercise_id, targetOf(pex));
+    for (const pex of day?.exercises ?? []) {
+      m[pex.id] = suggestNext(pex.exercise_id, targetOf(pex), day?.programCreatedAt ?? 0);
+    }
     return m;
   }, [day]);
 
+  /** Picked up if you left mid-workout and came back. */
+  const resumed = useState(() => (day ? openSessionForDay(day.id) : null))[0];
+
   const [setsState, setSetsState] = useState<Record<string, SetEntry[]>>(() => {
     const map: Record<string, SetEntry[]> = {};
+    const saved = resumed ? setsForSession(resumed.id) : [];
     for (const pex of day?.exercises ?? []) {
-      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight ?? pex.start_weight;
-      map[pex.id] = Array.from({ length: pex.sets }, () => ({
-        weight: w != null ? String(w) : '',
-        reps: '',
-        done: false,
-      }));
+      const w = suggestNext(pex.exercise_id, targetOf(pex), since).weight ?? pex.start_weight;
+      map[pex.id] = Array.from({ length: pex.sets }, (_, i) => {
+        const logged = saved.find((r) => r.exercise_id === pex.exercise_id && r.set_index === i);
+        if (logged) {
+          return {
+            id: logged.id,
+            weight: logged.weight != null ? String(logged.weight) : '',
+            reps: logged.reps != null ? String(logged.reps) : '',
+            done: logged.completed === 1,
+          };
+        }
+        return { weight: w != null ? String(w) : '', reps: '', done: false };
+      });
     }
     return map;
   });
@@ -86,12 +108,14 @@ export default function WorkoutScreen() {
   const dayTitle = day?.title;
   useEffect(() => {
     if (!dayId || !dayTitle) return;
-    const sid = startSession(dayId, dayTitle);
+    // resume the open session instead of piling up a new one every time
+    const sid = resumed?.id ?? startSession(dayId, dayTitle);
     sessionRef.current = sid;
     return () => {
-      if (!finishedRef.current) finishSession(sid);
+      // leaving mid-workout keeps it open so it can be resumed; empty ones go away
+      if (!finishedRef.current) discardIfEmpty(sid);
     };
-  }, [dayId, dayTitle]);
+  }, [dayId, dayTitle, resumed]);
 
   const patchSet = useCallback(
     (pexId: string, idx: number, patch: Partial<SetEntry>) =>
@@ -177,7 +201,7 @@ export default function WorkoutScreen() {
     setDay(fresh);
     const pex = fresh?.exercises.find((e) => e.id === pexId);
     if (pex) {
-      const w = suggestNext(pex.exercise_id, targetOf(pex)).weight ?? pex.start_weight;
+      const w = suggestNext(pex.exercise_id, targetOf(pex), since).weight ?? pex.start_weight;
       setSetsState((prev) => ({
         ...prev,
         [pexId]: Array.from({ length: pex.sets }, () => ({
@@ -197,6 +221,29 @@ export default function WorkoutScreen() {
   const pct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
   const elapsed = Math.floor((now - startedAt) / 1000);
   const elapsedStr = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
+
+  const doMinimize = () => {
+    finishedRef.current = true;
+    if (sessionRef.current) discardIfEmpty(sessionRef.current);
+    queryClient.invalidateQueries();
+    router.back();
+  };
+
+  const doCancel = () => {
+    Alert.alert('Отменить тренировку?', 'Всё, что отмечено, будет удалено.', [
+      { text: 'Продолжить', style: 'cancel' },
+      {
+        text: 'Отменить тренировку',
+        style: 'destructive',
+        onPress: () => {
+          finishedRef.current = true;
+          if (sessionRef.current) cancelSession(sessionRef.current);
+          queryClient.invalidateQueries();
+          router.back();
+        },
+      },
+    ]);
+  };
 
   const doFinish = () => {
     if (finishedRef.current) return;
@@ -244,8 +291,8 @@ export default function WorkoutScreen() {
       ) : (
         <>
           <View style={styles.header}>
-            <IconButton onPress={doFinish} variant="ghost">
-              <X size={22} color={theme.text} />
+            <IconButton onPress={doMinimize} variant="ghost">
+              <Minimize2 size={20} color={theme.text} />
             </IconButton>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Txt variant="subtitle" numberOfLines={1}>
@@ -313,6 +360,12 @@ export default function WorkoutScreen() {
           <View style={styles.footer}>
             {timer}
             <Button title="Завершить тренировку" onPress={doFinish} />
+            <Button
+              title="Отменить тренировку"
+              variant="ghost"
+              icon={<Trash2 size={15} color={theme.danger} />}
+              onPress={doCancel}
+            />
           </View>
         </>
       )}

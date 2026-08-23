@@ -80,15 +80,19 @@ export function recentSessions(limit = 20): SessionRow[] {
   );
 }
 
-/** Completed working sets from the most recent session that trained this exercise. */
-export function lastWorkingSets(exerciseId: string): LoggedSetRow[] {
+/**
+ * Completed working sets from the most recent session that trained this exercise.
+ * `since` ignores older logs — a freshly generated program supersedes numbers
+ * that were logged against the previous one.
+ */
+export function lastWorkingSets(exerciseId: string, since = 0): LoggedSetRow[] {
   const last = db.getFirstSync<{ sid: string }>(
     `SELECT ls.session_id as sid
        FROM logged_sets ls
        JOIN workout_sessions ws ON ws.id = ls.session_id
-      WHERE ls.exercise_id = ? AND ls.completed = 1
+      WHERE ls.exercise_id = ? AND ls.completed = 1 AND ws.started_at >= ?
       ORDER BY ws.started_at DESC LIMIT 1`,
-    [exerciseId],
+    [exerciseId, since],
   );
   if (!last) return [];
   return db.getAllSync<LoggedSetRow>(
@@ -98,13 +102,13 @@ export function lastWorkingSets(exerciseId: string): LoggedSetRow[] {
 }
 
 /** Whole days since the last completed session that trained this exercise. */
-export function daysSinceLast(exerciseId: string): number | null {
+export function daysSinceLast(exerciseId: string, since = 0): number | null {
   const r = db.getFirstSync<{ t: number | null }>(
     `SELECT MAX(ws.started_at) as t
        FROM logged_sets ls
        JOIN workout_sessions ws ON ws.id = ls.session_id
-      WHERE ls.exercise_id = ? AND ls.completed = 1`,
-    [exerciseId],
+      WHERE ls.exercise_id = ? AND ls.completed = 1 AND ws.started_at >= ?`,
+    [exerciseId, since],
   );
   if (!r || !r.t) return null;
   return Math.floor((Date.now() - r.t) / 86_400_000);
@@ -282,4 +286,45 @@ export function trainingDays(since: number): number[] {
     days.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
   }
   return [...days];
+}
+
+/** A workout that was started and neither finished nor cancelled. */
+export function openSession(): SessionRow | null {
+  return db.getFirstSync<SessionRow>(
+    'SELECT * FROM workout_sessions WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1',
+  );
+}
+
+export function openSessionForDay(programDayId: string): SessionRow | null {
+  return db.getFirstSync<SessionRow>(
+    `SELECT * FROM workout_sessions
+      WHERE program_day_id = ? AND finished_at IS NULL
+      ORDER BY started_at DESC LIMIT 1`,
+    [programDayId],
+  );
+}
+
+/** Sets already logged in a session, for restoring the screen state. */
+export function setsForSession(sessionId: string): LoggedSetRow[] {
+  return db.getAllSync<LoggedSetRow>(
+    'SELECT * FROM logged_sets WHERE session_id = ? ORDER BY set_index',
+    [sessionId],
+  );
+}
+
+/** Throw the whole session away — "отменить тренировку". */
+export function cancelSession(sessionId: string) {
+  db.withTransactionSync(() => {
+    db.runSync('DELETE FROM logged_sets WHERE session_id = ?', [sessionId]);
+    db.runSync('DELETE FROM workout_sessions WHERE id = ?', [sessionId]);
+  });
+}
+
+/** Drop a session only if nothing was ticked off — keeps stale rows out. */
+export function discardIfEmpty(sessionId: string) {
+  const done = db.getFirstSync<{ n: number }>(
+    'SELECT COUNT(*) as n FROM logged_sets WHERE session_id = ? AND completed = 1',
+    [sessionId],
+  );
+  if (!done || done.n === 0) cancelSession(sessionId);
 }

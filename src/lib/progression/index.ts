@@ -66,8 +66,12 @@ export function suggest(
   };
 }
 
-/** Convenience: pull last performance + compute a suggestion for an exercise. */
-export function suggestNext(exerciseId: string, target: Target): Suggestion {
-  const sets = lastWorkingSets(exerciseId);
-  return suggest(sets, target, incrementFor(exerciseId), daysSinceLast(exerciseId));
+/**
+ * Convenience: pull last performance + compute a suggestion for an exercise.
+ * `since` scopes the history to the current program, so old logs from a
+ * previous program don't drag the suggested weight back down.
+ */
+export function suggestNext(exerciseId: string, target: Target, since = 0): Suggestion {
+  const sets = lastWorkingSets(exerciseId, since);
+  return suggest(sets, target, incrementFor(exerciseId), daysSinceLast(exerciseId, since));
 }

@@ -4,7 +4,11 @@ import type { ProgramDayRow, ProgramExerciseRow, ProgramRow } from '@/lib/types'
 import { uid } from '@/lib/uid';
 import { db } from './index';
 
-export type LoadedDay = ProgramDayRow & { exercises: ProgramExerciseRow[] };
+export type LoadedDay = ProgramDayRow & {
+  exercises: ProgramExerciseRow[];
+  /** When the owning program was generated — scopes weight history to it. */
+  programCreatedAt: number;
+};
 export type LoadedProgram = ProgramRow & { days: LoadedDay[] };
 
 export function saveProgram(gen: GeneratedProgram): string {
@@ -72,6 +76,7 @@ export function getActiveProgram(): LoadedProgram | null {
     ...p,
     days: days.map((d) => ({
       ...d,
+      programCreatedAt: p.created_at,
       exercises: db.getAllSync<ProgramExerciseRow>(
         'SELECT * FROM program_exercises WHERE day_id = ? ORDER BY order_index',
         [d.id],
@@ -92,10 +97,16 @@ export function extendProgram(programId: string, byWeeks: number) {
 }
 
 export function getProgramDay(dayId: string): LoadedDay | null {
-  const d = db.getFirstSync<ProgramDayRow>('SELECT * FROM program_days WHERE id = ?', [dayId]);
+  const d = db.getFirstSync<ProgramDayRow & { program_created_at: number }>(
+    `SELECT pd.*, p.created_at as program_created_at
+       FROM program_days pd JOIN programs p ON p.id = pd.program_id
+      WHERE pd.id = ?`,
+    [dayId],
+  );
   if (!d) return null;
   return {
     ...d,
+    programCreatedAt: d.program_created_at,
     exercises: db.getAllSync<ProgramExerciseRow>(
       'SELECT * FROM program_exercises WHERE day_id = ? ORDER BY order_index',
       [d.id],
