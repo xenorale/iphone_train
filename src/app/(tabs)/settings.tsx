@@ -26,11 +26,11 @@ const WEEKDAYS = [
 const HOURS = [8, 12, 16, 17, 18, 20];
 
 const STRENGTH_LABELS: Record<string, string> = {
-  chest: 'Жим лёжа',
-  legs: 'Присед / жим ногами',
-  back: 'Тяга',
-  biceps: 'Бицепс',
-  triceps: 'Трицепс',
+  chest: 'Жим штанги лёжа',
+  legs: 'Жим ногами',
+  back: 'Тяга верхнего блока',
+  biceps: 'Подъём штанги на бицепс',
+  triceps: 'Разгибание рук на блоке',
 };
 
 export default function SettingsScreen() {

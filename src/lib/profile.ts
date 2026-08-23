@@ -36,11 +36,12 @@ export const PROFILE = {
   /** Every session ends with direct ab work. */
   absEveryWorkout: true,
   /**
-   * Movements Влад doesn't want programmed: free-weight squats, deadlifts and
-   * bent-over rows. Smith machine, sled and machine versions stay.
+   * Не программировать: приседания и любые тяги с пола (становая, румынская,
+   * мёртвая) со свободным весом. Версии в Смите и на тренажёрах — можно.
    */
-  excludedPatterns: [/squat/i, /deadlift/i, /bent.?over row/i, /good morning/i],
-  excludedWithEquipment: ['barbell', 'olympic barbell', 'trap bar', 'ez barbell'],
+  excludedPatterns: [/squat/i, /deadlift/i],
+  /** Снаряды, на которых эти движения всё же допустимы. */
+  excludedUnlessEquipment: ['smith machine', 'leverage machine', 'sled machine'],
 } as const;
 
 export function age(on: Date = new Date()): number {

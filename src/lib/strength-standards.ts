@@ -29,6 +29,19 @@ const ANCHOR_FOR: Record<string, keyof StrengthAnchors> = {
 };
 
 /**
+ * The anchor lifts aren't all barbell moves, so convert each one back to its
+ * barbell equivalent before scaling. A 150 kg leg press is roughly a 75 kg
+ * squat, not a 150 kg one.
+ */
+const ANCHOR_TO_BARBELL: Record<keyof StrengthAnchors, number> = {
+  chest: 1, // жим штанги лёжа — эталон
+  legs: 1.8, // жим ногами ≈ вдвое больше приседа (см. LEG_FACTOR)
+  back: 0.7, // тяга верхнего блока — блочное упражнение (см. EQUIPMENT_FACTOR.cable)
+  biceps: 1, // подъём штанги на бицепс — эталон
+  triceps: 0.7, // разгибание рук на блоке
+};
+
+/**
  * Working weight for ~8 reps on the group's main barbell lift, as a share of
  * bodyweight. Deliberately conservative — undershooting costs one warm-up set,
  * overshooting costs a shoulder.
@@ -65,6 +78,24 @@ const EQUIPMENT_FACTOR: Record<string, number> = {
   kettlebell: 0.35,
   weighted: 0.25,
   'medicine ball': 0.1,
+};
+
+/**
+ * Legs don't follow the general equipment scaling: a leg press handles far more
+ * than a squat, while cable and dumbbell leg work handles far less.
+ */
+const LEG_MUSCLES = new Set(['quads', 'hamstrings', 'glutes', 'adductors', 'abductors']);
+
+const LEG_FACTOR: Record<string, number> = {
+  'leverage machine': 1.8,
+  'sled machine': 1.8,
+  'smith machine': 1,
+  barbell: 1,
+  'olympic barbell': 1,
+  'trap bar': 1.1,
+  dumbbell: 0.35,
+  kettlebell: 0.35,
+  cable: 0.4,
 };
 
 /** Groups where an isolation movement is the norm, not a scaled-down compound. */
@@ -109,9 +140,15 @@ export function startingWeight(
   // base = what this muscle group handles on a barbell for ~8 reps
   const anchorKey = ANCHOR_FOR[exercise.muscle];
   const anchored = anchorKey ? anchors[anchorKey] : undefined;
-  const base = anchored ?? bodyweight * (BODYWEIGHT_SHARE[exercise.muscle] ?? 0.3);
+  const base =
+    anchored != null && anchorKey
+      ? anchored / ANCHOR_TO_BARBELL[anchorKey]
+      : bodyweight * (BODYWEIGHT_SHARE[exercise.muscle] ?? 0.3);
 
-  let weight = base * (EQUIPMENT_FACTOR[exercise.equipment] ?? 0.7);
+  const factor = LEG_MUSCLES.has(exercise.muscle)
+    ? (LEG_FACTOR[exercise.equipment] ?? 0.5)
+    : (EQUIPMENT_FACTOR[exercise.equipment] ?? 0.7);
+  let weight = base * factor;
 
   // a secondary compound or an accessory move is lighter than the group's main lift
   if (!exercise.compound && !SMALL_MUSCLES.has(exercise.muscle)) weight *= 0.55;

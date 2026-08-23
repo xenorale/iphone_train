@@ -25,11 +25,11 @@ import { useSettings } from '@/lib/store/settings';
 import type { StrengthAnchors } from '@/lib/types';
 
 const FIELDS: { key: keyof StrengthAnchors; label: string; hint: string }[] = [
-  { key: 'chest', label: 'Жим лёжа', hint: 'напр. 80' },
-  { key: 'legs', label: 'Присед / жим ногами', hint: 'напр. 120' },
-  { key: 'back', label: 'Тяга в наклоне', hint: 'напр. 80' },
-  { key: 'biceps', label: 'Подъём на бицепс', hint: 'напр. 30' },
-  { key: 'triceps', label: 'Разгибания / жим узким', hint: 'напр. 40' },
+  { key: 'chest', label: 'Жим штанги лёжа', hint: 'напр. 70' },
+  { key: 'legs', label: 'Жим ногами в тренажёре', hint: 'напр. 150' },
+  { key: 'back', label: 'Тяга верхнего блока к груди', hint: 'напр. 60' },
+  { key: 'biceps', label: 'Подъём штанги на бицепс', hint: 'напр. 30' },
+  { key: 'triceps', label: 'Разгибание рук на блоке', hint: 'напр. 25' },
 ];
 
 const num = (s: string): number | undefined => {
@@ -107,9 +107,10 @@ export default function NewProgramScreen() {
             Рабочие веса
           </Txt>
           <Txt variant="caption" color="textSecondary" style={{ marginTop: Spacing.two }}>
-            Вес, с которым делаешь 6–8 повторов, не разовый максимум. От них считаются веса во
-            всей программе, так что лучше заполнить — иначе всё посчитается от массы тела и может
-            не совпасть с твоим реальным уровнем.
+            Вес снаряда, с которым делаешь 6–8 повторов — не разовый максимум. По этим пяти
+            упражнениям считаются веса во всей программе, так что лучше заполнить: иначе всё
+            посчитается от массы тела и может не совпасть с твоим уровнем. Не помнишь точно —
+            пиши примерно.
           </Txt>
 
           <View style={{ gap: Spacing.four, marginTop: Spacing.four }}>

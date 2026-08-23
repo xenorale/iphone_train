@@ -45,9 +45,9 @@ export function estimateOneRm(workingWeight: number, reps = 7): number {
  */
 function allowedExercises(): Exercise[] {
   const gymEquipment: readonly string[] = PROFILE.equipment;
-  const bannedEquipment: readonly string[] = PROFILE.excludedWithEquipment;
+  const stillAllowed: readonly string[] = PROFILE.excludedUnlessEquipment;
   const isExcluded = (e: Exercise) =>
-    bannedEquipment.includes(e.equipment) && PROFILE.excludedPatterns.some((re) => re.test(e.name));
+    PROFILE.excludedPatterns.some((re) => re.test(e.name)) && !stillAllowed.includes(e.equipment);
   const pool = EXERCISES.filter((e) => gymEquipment.includes(e.equipment) && !isExcluded(e));
 
   const PER_GROUP = 8;
