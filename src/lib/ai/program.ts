@@ -69,7 +69,14 @@ function allowedExercises(): Exercise[] {
   const calisthenics = pool
     .filter((e) => e.equipment === 'body weight' && e.compound && !out.includes(e))
     .slice(0, 12);
-  return [...out, ...calisthenics];
+
+  // machines the model would otherwise never see — one entry each, they matter
+  // for the cardio finisher
+  const cardioMachines = pool.filter(
+    (e) => e.muscle === 'cardiovascular system' && e.equipment !== 'body weight' && !out.includes(e),
+  );
+
+  return [...out, ...calisthenics, ...cardioMachines];
 }
 
 function buildMessages(input: ProgramInput, repair?: string): ChatMessage[] {
@@ -116,6 +123,7 @@ ${catalog}
 - 6–8 упражнений в день, тяжёлая база в начале, изоляция в конце.
 - ОБЯЗАТЕЛЬНО в каждом дне минимум одно упражнение на пресс (группа «Пресс»).
 - ОБЯЗАТЕЛЬНО в каждом дне 1–2 упражнения с собственным весом (подтягивания, брусья, отжимания) — вперемешку с железом, а не отдельным блоком в конце.
+- ОБЯЗАТЕЛЬНО последним упражнением каждого дня — кардио (группа «Кардио») на ${PROFILE.cardioMinutes} минут: sets=1, repMin=1, repMax=1, в note укажи длительность и темп. Оно нужно для рельефа и не должно мешать восстановлению.
 - Рабочие веса НЕ указывай — их считает само приложение по силовым атлета. Твоя задача: подобрать упражнения, подходы и повторы.
 - Цель совмещает рельеф и силу → phase = "recomp", если нет веской причины иначе. В phaseReason объясни выбор 1–2 предложениями по-русски.
 - weeks — длительность мезоцикла (8–12).

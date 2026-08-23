@@ -26,6 +26,10 @@ export const PROFILE = {
     'kettlebell',
     'assisted',
     'weighted',
+    // кардиозона
+    'stationary bike',
+    'elliptical machine',
+    'stepmill machine',
   ],
   /** Free-form goal handed to the model verbatim — richer than an enum. */
   goal:
@@ -35,6 +39,8 @@ export const PROFILE = {
   wantsCalisthenics: true,
   /** Every session ends with direct ab work. */
   absEveryWorkout: true,
+  /** Cardio finisher for the "рельеф" half of the goal. */
+  cardioMinutes: 12,
   /**
    * Не программировать: приседания и любые тяги с пола (становая, румынская,
    * мёртвая) со свободным весом. Версии в Смите и на тренажёрах — можно.

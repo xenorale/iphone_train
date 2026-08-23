@@ -7,7 +7,7 @@ import { Button, Card, Divider, PressableScale, ProgressBar, Screen, Txt } from 
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { extendProgram, type LoadedDay } from '@/lib/db/programs';
-import { sessionCountSince } from '@/lib/db/sessions';
+import { cycleProgress } from '@/lib/mesocycle';
 import { useActiveProgram } from '@/lib/hooks/use-active-program';
 
 const PHASE_RU: Record<string, string> = {
@@ -52,17 +52,16 @@ export default function ProgramScreen() {
     );
   }
 
-  const perWeek = program.days_per_week ?? program.days.length;
-  const totalSessions = (program.weeks ?? 0) * perWeek;
-  const doneSessions = program.weeks ? sessionCountSince(program.created_at) : 0;
-  const week = program.weeks ? Math.min(program.weeks, Math.floor(doneSessions / Math.max(1, perWeek)) + 1) : 1;
-  const cycleProgress = totalSessions ? Math.min(1, doneSessions / totalSessions) : 0;
-  const complete = program.weeks ? doneSessions >= totalSessions : false;
+  const cycle = cycleProgress(program);
 
   return (
     <Screen
       title={program.name}
-      subtitle={program.weeks ? `${program.days.length} дн/нед · ${program.weeks} недель` : `${program.days.length} дней в неделю`}
+      subtitle={
+        program.weeks
+          ? `${program.days.length} тренировки в круге · ${program.weeks} кругов`
+          : `${program.days.length} тренировки в круге`
+      }
       tabBarSpacing>
       {program.phase ? (
         <Card variant="accent" padding="five">
@@ -72,7 +71,7 @@ export default function ProgramScreen() {
             </Txt>
             {program.weeks ? (
               <Txt variant="micro" color="textTertiary">
-                Неделя {week} из {program.weeks}
+                Круг {cycle.cycle} из {cycle.totalCycles}
               </Txt>
             ) : null}
           </View>
@@ -83,16 +82,16 @@ export default function ProgramScreen() {
           ) : null}
           {program.weeks ? (
             <View style={{ marginTop: Spacing.three, gap: Spacing.two }}>
-              <ProgressBar progress={cycleProgress} />
+              <ProgressBar progress={cycle.progress} />
               <Txt variant="caption" color="textTertiary">
-                {doneSessions} из {totalSessions} тренировок · недели засчитываются сами
+                {cycle.done} из {cycle.totalSessions} тренировок · круг = проход по всем дням
               </Txt>
-              {complete ? (
+              {cycle.complete ? (
                 <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
                   <View style={styles.doneRow}>
                     <Check size={16} color={theme.success} />
                     <Txt variant="label" color="success">
-                      Мезоцикл пройден! Что дальше?
+                      Программа пройдена! Что дальше?
                     </Txt>
                   </View>
                   <Button

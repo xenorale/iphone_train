@@ -8,7 +8,8 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { todayISO, totalsForDate } from '@/lib/db/food';
 import { latestMetric } from '@/lib/db/metrics';
-import { openSession, sessionCountSince } from '@/lib/db/sessions';
+import { openSession } from '@/lib/db/sessions';
+import { cycleProgress, nextDayIndex } from '@/lib/mesocycle';
 import { dailyTargets } from '@/lib/nutrition';
 import { useActiveProgram } from '@/lib/hooks/use-active-program';
 import { age, PROFILE } from '@/lib/profile';
@@ -21,7 +22,7 @@ export default function TodayScreen() {
 
   // Floating schedule: the next session is simply the next day in the rotation,
   // whenever you actually make it to the gym.
-  const done = program ? sessionCountSince(program.created_at) : 0;
+  const cycle = program ? cycleProgress(program) : null;
   const today = todayISO();
   const { data: eaten } = useQuery({
     queryKey: ['foodTotals', today],
@@ -33,8 +34,7 @@ export default function TodayScreen() {
   });
   const targets = dailyTargets(bodyweight ?? PROFILE.fallbackBodyweight);
   const { data: unfinished } = useQuery({ queryKey: ['openSession'], queryFn: () => openSession() });
-  const nextDay = program?.days.length ? program.days[done % program.days.length] : null;
-  const week = program?.days.length ? Math.floor(done / program.days.length) + 1 : 1;
+  const nextDay = program?.days.length ? program.days[nextDayIndex(program)] : null;
 
   return (
     <Screen title="Сегодня" subtitle="VOLT" tabBarSpacing>
@@ -70,16 +70,17 @@ export default function TodayScreen() {
             <Card style={styles.stat}>
               <CalendarCheck size={18} color={theme.accent} />
               <Txt variant="subtitle" rounded style={{ marginTop: Spacing.two }}>
-                Неделя {program.weeks ? Math.min(week, program.weeks) : week}
+                Круг {cycle?.cycle ?? 1}
+                {cycle?.totalCycles ? ` из ${cycle.totalCycles}` : ''}
               </Txt>
               <Txt variant="caption" color="textSecondary">
-                {program.weeks ? `из ${program.weeks}` : 'мезоцикла'}
+                по {cycle?.perCycle ?? 0} тренировки
               </Txt>
             </Card>
             <Card style={styles.stat}>
               <Dumbbell size={18} color={theme.accent} />
               <Txt variant="subtitle" rounded style={{ marginTop: Spacing.two }}>
-                {done}
+                {cycle?.done ?? 0}
               </Txt>
               <Txt variant="caption" color="textSecondary">
                 тренировок всего
