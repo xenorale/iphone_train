@@ -38,12 +38,14 @@ export function RestTimer({
   const alertRef = useRef<string | null>(null);
 
   const remaining = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  const isUp = remaining <= 0;
 
-  // tick against the clock
+  // tick against the clock; stop once it's up so nothing spins in the background
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 500);
+    if (isUp) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [isUp]);
 
   // schedule the background alert once, cancel it if the timer is dismissed
   useEffect(() => {

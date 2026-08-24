@@ -7,6 +7,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoachSheet } from '@/components/coach-sheet';
+import { ElapsedTime } from '@/components/elapsed-time';
 import { ExerciseRunner, type SetEntry } from '@/components/exercise-runner';
 import { ExerciseSwapSheet } from '@/components/exercise-swap-sheet';
 import { PlateCalculator } from '@/components/plate-calculator';
@@ -97,12 +98,6 @@ export default function WorkoutScreen() {
   const [swapTarget, setSwapTarget] = useState<ProgramExerciseRow | null>(null);
   const [coachWorkout, setCoachWorkout] = useState(false);
   const [startedAt] = useState(() => Date.now());
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const dayId = day?.id;
   const dayTitle = day?.title;
@@ -219,8 +214,6 @@ export default function WorkoutScreen() {
   const completedCount = allEntries.filter((s) => s.done).length;
   const totalCount = allEntries.length;
   const pct = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
-  const elapsed = Math.floor((now - startedAt) / 1000);
-  const elapsedStr = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
 
   const doMinimize = () => {
     finishedRef.current = true;
@@ -298,9 +291,7 @@ export default function WorkoutScreen() {
               <Txt variant="subtitle" numberOfLines={1}>
                 {day.title}
               </Txt>
-              <Txt variant="caption" color="textTertiary">
-                {completedCount} из {totalCount} подходов · {elapsedStr}
-              </Txt>
+              <ElapsedTime startedAt={startedAt} prefix={`${completedCount} из ${totalCount} подходов · `} />
             </View>
             <IconButton size={44} variant="ghost" onPress={() => setCoachWorkout(true)}>
               <Sparkles size={20} color={theme.accent} />
